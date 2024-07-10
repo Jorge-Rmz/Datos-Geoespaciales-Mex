@@ -7,10 +7,11 @@ import plotly.express as px
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
 
+file_path = "data.csv"
 # Cargar el archivo CSV con datos geoespaciales
-uploaded_file = st.file_uploader("Elija un archivo CSV", type="csv")
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+
+if file_path is not None:
+    df = pd.read_csv(file_path)
     st.write(df)
 
     # Filtrado de datos por región
