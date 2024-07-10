@@ -7,7 +7,7 @@ import plotly.express as px
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
 
-file_path = "data.csv"
+file_path = "datos/data.csv"
 # Cargar el archivo CSV con datos geoespaciales
 
 if file_path is not None:
