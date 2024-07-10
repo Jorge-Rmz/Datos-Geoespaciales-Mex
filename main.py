@@ -11,7 +11,7 @@ file_path = "datos/data.csv"
 # Cargar el archivo CSV con datos geoespaciales
 
 if file_path is not None:
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path )
     st.write(df)
 
     # Filtrado de datos por región
