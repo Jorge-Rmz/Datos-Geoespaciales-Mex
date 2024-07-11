@@ -14,16 +14,18 @@ if file_path is not None:
     df = pd.read_csv(file_path)
 
     # Filtrado de datos por país
-    countries = df['Country Name'].unique()
+    countries = df['Country'].unique()
     selected_countries = st.multiselect('Seleccione los países para visualizar', countries)
 
     if selected_countries:
-        filtered_df = df[df['Country Name'].isin(selected_countries)]
+        filtered_df = df[df['Country'].isin(selected_countries)]
         st.write(filtered_df)
     else:
         filtered_df = df
         st.write(filtered_df)
 
-    range = list(range(1960, 2024))
+    range = list(range(1961, 2024))
 
-    st.bar_chart(df, x="Country Name", y='1960', horizontal=True)
+    selected = st.selectbox("Año", range, index=0)
+
+    st.bar_chart(df, x="Country", y=str(selected), horizontal=True)
