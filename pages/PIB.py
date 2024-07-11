@@ -1,8 +1,5 @@
 import streamlit as st
 import pandas as pd
-import folium
-from streamlit_folium import folium_static
-import plotly.express as px
 
 # Título de la aplicación
 st.title('Visualizador de datos del PIB en el mundo')
@@ -24,8 +21,11 @@ if file_path is not None:
         filtered_df = df
         st.write(filtered_df)
 
+    # Lista de años
     range = list(range(1961, 2024))
 
+    # Selección del año
     selected = st.selectbox("Año", range, index=0)
 
+    # Gráfica de PIB en el mundo por Año
     st.bar_chart(df, x="Country", y=str(selected), horizontal=True)
