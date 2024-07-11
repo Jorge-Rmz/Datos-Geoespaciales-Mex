@@ -34,16 +34,16 @@ else:
 
         # Generar gráfico de pastel si hay datos seleccionados
         if not comparison_df.empty:
-            st.subheader('Gráfico de Pastel: Total de población por nacionalidad')
+            st.subheader('Total de población por nacionalidad')
 
             fig = px.pie(comparison_df, values='Total', names='Nacionalidad', title='Distribución de la población total por nacionalidad')
             st.plotly_chart(fig)
 
-            st.subheader('Gráfico de Barras: Total de población por nacionalidad')
+            st.subheader('Total de población por nacionalidad')
             fig2 = px.bar(comparison_df, x='Nacionalidad', y='Total', title='Total de población por nacionalidad')
             st.plotly_chart(fig2)
 
-            st.subheader('Gráfico de Pastel: Evolución de la Población en el Tiempo')
+            st.subheader('Evolución de la Población en el Tiempo')
             fig3 = px.pie(comparison_df, values='Total', names='Nacionalidad', title=f'Evolución de la población en el período {selected_period}')
             st.plotly_chart(fig3)
 
