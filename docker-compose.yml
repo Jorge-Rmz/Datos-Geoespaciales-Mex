@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  visualizador:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/Home
+    environment:
+      - PYTHONUNBUFFERED=1
