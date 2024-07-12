@@ -2,17 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import redis
-
-# Comprobar conexion a Redis
-#try:
-#    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
-#    redis_client.ping()  # Verifica la conexión
-#    st.success("Conectado a Redis")
-#except redis.ConnectionError as e:
-#   st.error(f"No se pudo conectar a Redis: {e}")
+from io import StringIO
 
 # Conectar a Redis
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+try:
+    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+    redis_client.ping()  # Verifica la conexión
+    st.success("Conectado a Redis")
+except redis.ConnectionError as e:
+    st.error(f"No se pudo conectar a Redis: {e}")
 
 # Título de la aplicación
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
@@ -48,11 +46,15 @@ def load_data():
         return None
 
 def get_data():
-    data = redis_client.get('data')
-    if data:
-        df = pd.read_json(data, orient='split')
-        return df
-    else:
+    try:
+        data = redis_client.get('data')
+        if data:
+            df = pd.read_json(StringIO(data), orient='split')
+            return df
+        else:
+            return load_data()
+    except redis.ConnectionError as e:
+        st.error(f"No se pudo conectar a Redis para obtener los datos: {e}")
         return load_data()
 
 # Obtener datos de Redis o cargar si no existen
