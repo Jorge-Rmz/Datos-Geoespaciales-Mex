@@ -16,7 +16,7 @@ except redis.ConnectionError as e:
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
 # Ruta del archivo CSV
-file_path = "datos/ssdp02a_por_trab_dom_cui.csv"
+file_path = "Back-End/datos/ssdp02a_por_trab_dom_cui.csv"
 
 def load_data():
     try:
