@@ -1,64 +1,33 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import redis
-from io import StringIO
-
-# Conecta a Redis
-try:
-    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
-    redis_client.ping()  # Verifica la conexión
-    st.success("Conectado a Redis")
-except redis.ConnectionError as e:
-    st.error(f"No se pudo conectar a Redis: {e}")
+import requests
 
 # Título de la aplicación
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
-# Ruta del archivo CSV
-file_path = "Back-End/datos/ssdp02a_por_trab_dom_cui.csv"
+# URL del backend
+backend_url = "http://localhost:8503/get_data"
 
+# Función para cargar los datos desde el backend
 def load_data():
     try:
-        # Carga el archivo CSV con datos
-        df = pd.read_csv(file_path, encoding='latin1')
-
-        # Renombra las columnas
-        df.rename(columns={
-            'Suma de porcentajes del total de horas por semana dedicados a actividades domésticas y de cuidado que realizan los integrantes del hogar de 12 y más años': 'Horas Domésticas y Cuidado',
-            'Tasa de participación de la población de 12 años y más en trabajo doméstico no remunerado para el propio hogar': 'Tasa Trabajo Doméstico',
-            'Tasa de participación de la población de 12 años y más en trabajo no remunerado de cuidado a integrantes del hogar': 'Tasa Trabajo Cuidado'
-        }, inplace=True)
-
-        # Almacena en Redis
-        redis_client.set('data', df.to_json(orient='split'))
-
-        st.write(df.head())
-
+        response = requests.get(backend_url)
+        response.raise_for_status()
+        data = response.json()
+        df = pd.DataFrame(data)
         return df
-
-    except FileNotFoundError:
-        st.error(f"El archivo {file_path} no se encontró. Asegúrate de que el archivo está en el directorio correcto.")
-    except pd.errors.ParserError:
-        st.error(f"Hubo un error al intentar parsear el archivo {file_path}. Verifica el formato del archivo CSV.")
-    except Exception as e:
-        st.error(f"Ocurrió un error: {e}")
+    except requests.RequestException as e:
+        st.error(f"No se pudo obtener datos del backend: {e}")
         return None
 
-def get_data():
-    try:
-        data = redis_client.get('data')
-        if data:
-            df = pd.read_json(StringIO(data), orient='split')
-            return df
-        else:
-            return load_data()
-    except redis.ConnectionError as e:
-        st.error(f"No se pudo conectar a Redis para obtener los datos: {e}")
-        return load_data()
+# Obtiene los datos del backend
+df = load_data()
 
-# Obtiene los datos de Redis o los carga si no existen
-df = get_data()
+# Muestra la tabla completa inicialmente
+if df is not None:
+    st.write("Datos Completos:")
+    st.dataframe(df)
 
 # Filtrado de datos por periodo
 if df is not None:
@@ -103,7 +72,7 @@ if df is not None:
 
                 # Tabla comparativa de las entidades seleccionadas
                 st.write('Tabla Comparativa de Entidades Seleccionadas')
-                st.write(comparison_df)
+                st.dataframe(comparison_df)
             else:
                 st.warning("No hay datos seleccionados.")
         else:
