@@ -4,7 +4,7 @@ import plotly.express as px
 import redis
 from io import StringIO
 
-# Conectar a Redis
+# Conecta a Redis
 try:
     redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
     redis_client.ping()  # Verifica la conexión
@@ -20,17 +20,17 @@ file_path = "datos/ssdp02a_por_trab_dom_cui.csv"
 
 def load_data():
     try:
-        # Cargar el archivo CSV con datos
+        # Carga el archivo CSV con datos
         df = pd.read_csv(file_path, encoding='latin1')
 
-        # Renombrar las columnas
+        # Renombra las columnas
         df.rename(columns={
             'Suma de porcentajes del total de horas por semana dedicados a actividades domésticas y de cuidado que realizan los integrantes del hogar de 12 y más años': 'Horas Domésticas y Cuidado',
             'Tasa de participación de la población de 12 años y más en trabajo doméstico no remunerado para el propio hogar': 'Tasa Trabajo Doméstico',
             'Tasa de participación de la población de 12 años y más en trabajo no remunerado de cuidado a integrantes del hogar': 'Tasa Trabajo Cuidado'
         }, inplace=True)
 
-        # Almacenar en Redis
+        # Almacena en Redis
         redis_client.set('data', df.to_json(orient='split'))
 
         st.write(df.head())
@@ -57,7 +57,7 @@ def get_data():
         st.error(f"No se pudo conectar a Redis para obtener los datos: {e}")
         return load_data()
 
-# Obtener datos de Redis o cargar si no existen
+# Obtiene los datos de Redis o los carga si no existen
 df = get_data()
 
 # Filtrado de datos por periodo
@@ -79,7 +79,7 @@ if df is not None:
             else:
                 comparison_df = pd.DataFrame(columns=df.columns)
 
-            # Generar gráficos comparativos si hay entidades seleccionadas
+            # Genera los gráficos comparativos si hay entidades seleccionadas
             if not comparison_df.empty:
                 st.subheader('Comparación de Entidades Seleccionadas')
 
