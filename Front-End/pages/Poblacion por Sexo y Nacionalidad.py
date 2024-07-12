@@ -4,7 +4,7 @@ import plotly.express as px
 import redis
 from io import StringIO
 
-#Conecta a redis
+# Conecta a Redis
 try:
     redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
     redis_client.ping()  # Verifica la conexión
@@ -15,15 +15,15 @@ except redis.ConnectionError as e:
 # Título de la aplicación
 st.title('Visualizador de población por sexo y nacionalidad')
 
-#Ruta del archivo CSV
-file_path = "Back-End/datos/66375.csv"
+# Ruta del archivo CSV
+file_path = "datos/66375.csv"
 
 def load_data():
     try:
         # Carga el archivo CSV con datos
         df = pd.read_csv(file_path, encoding='utf-8', delimiter=';', thousands=',')
 
-        # Almacena en redis
+        # Almacena en Redis
         redis_client.set('data', df.to_json(orient='split'))
 
         st.write(df.head())
