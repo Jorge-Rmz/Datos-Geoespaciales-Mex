@@ -35,7 +35,7 @@ def set_data_to_redis(key, data):
 st.title('Visualizador de Consumo de energía eléctrica global')
 st.markdown('En esta sección, se mostrará un análisis del consumo de energía eléctrica global en kilowatts/hora.')
 
-file_path = 'datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv'
+file_path = 'Back-End/datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv'
 data_key = "energy_consumption_data"
 
 df = get_data_from_redis(data_key)
