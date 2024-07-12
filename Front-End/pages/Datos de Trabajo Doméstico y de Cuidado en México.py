@@ -2,29 +2,65 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
+import redis
+from io import StringIO
+
+redis_host = "localhost"
+redis_port = 6379
+
+# Conectar a Redis
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
 # Título de la aplicación
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
 # URL del backend
-backend_url = "http://localhost:8503/get_data"
+backend_url = "http://localhost:5000/get_data"
 
-# Función para cargar los datos desde el backend
+
+# Función para verificar si Redis está disponible
+def is_redis_available():
+    try:
+        redis_client.ping()
+        return True
+    except redis.ConnectionError:
+        return False
+
+
+# Función para cargar los datos desde el backend o Redis
 def load_data():
+    redis_available = is_redis_available()
+
+    if redis_available:
+        st.success("Conectado a Redis")
+        data = redis_client.get('data')
+        if data:
+            st.info("Mostrando datos de Redis")
+            return pd.read_json(StringIO(data), orient='split')
+        else:
+            st.info("Intentando cargar datos desde el backend")
+    else:
+        st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
+
     try:
         response = requests.get(backend_url)
-        response.raise_for_status()
+        response.raise_for_status()  # Verifica errores de la respuesta
         data = response.json()
         df = pd.DataFrame(data)
+        # Almacena datos en Redis si está disponible
+        if redis_available:
+            redis_client.set('data', df.to_json(orient='split'))
+        st.info("Mostrando datos del backend")
         return df
-    except requests.RequestException as e:
-        st.error(f"No se pudo obtener datos del backend: {e}")
+    except requests.RequestException:
+        st.error("No se pudo obtener datos del backend ni de Redis")
         return None
 
-# Obtiene los datos del backend
+
+# Obtiene los datos del backend o desde Redis
 df = load_data()
 
-# Muestra la tabla completa inicialmente
+# Mostrar la tabla completa inicialmente
 if df is not None:
     st.write("Datos Completos:")
     st.dataframe(df)
