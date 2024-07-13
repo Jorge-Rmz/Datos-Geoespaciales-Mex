@@ -3,79 +3,93 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 import plotly.express as px
-import redis
-import json
+import requests
 
-# Conectar a Redis
-r = redis.Redis(host='localhost', port=6379, db=0)
+# URL de la API Flask
+api_url = "http://127.0.0.1:5000"
 
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
 
-file_path = "Back-End/datos/data.csv"
+# Verificar si los datos están en la API
 
-# Verificar si los datos están en Redis
-data_key = 'geospatial_data'
-if r.exists(data_key):
-    # Cargar los datos de Redis
-    df = pd.DataFrame(json.loads(r.get(data_key)))
-    st.write("Datos cargados desde Redis")
-else:
-    # Cargar el archivo CSV con datos geoespaciales
-    if file_path is not None:
-        df = pd.read_csv(file_path)
-        # Guardar los datos en Redis
-        r.set(data_key, json.dumps(df.to_dict(orient='records')))
-        st.write("Datos cargados desde el archivo CSV y guardados en Redis")
+try:
+    # Verificar si los datos están en la API
+    response = requests.get(f"{api_url}/get_data")
 
-    st.write(df)
+    if response.status_code == 200:
+        df = pd.DataFrame(response.json())
+        st.success("Datos cargados desde Redis")
+    else:
+        # Cargar el archivo CSV con datos geoespaciales
+        file_path = "Back-End/datos/data.csv"
+        if file_path is not None:
+            df = pd.read_csv(file_path)
+            # Guardar los datos en la API
+            requests.post(f"{api_url}/update_data", json=df.to_dict(orient='records'))
+            st.write("Datos cargados desde el archivo CSV y guardados en la API Flask")
 
-# Filtrado de datos por región
-regiones = df['region'].unique()
-selected_regions = st.multiselect('Seleccione las regiones para visualizar', regiones)
+        st.write(df)
 
-if selected_regions:
-    filtered_df = df[df['region'].isin(selected_regions)]
-else:
-    filtered_df = df
+except requests.exceptions.ConnectionError:
+    st.error("No se pudo conectar a la API. Por favor, asegúrate de que la API Flask esté en funcionamiento.")
+except FileNotFoundError:
+    st.error("El archivo CSV no se encontró. Por favor, verifica la ruta del archivo.")
+except requests.exceptions.HTTPError as http_err:
+    st.error(f"Error HTTP: {http_err}")
+except Exception as e:
+    st.error(f"Se produjo un error inesperado: {e}")
 
-# Filtrado de datos por población
-min_population, max_population = st.slider('Rango de población', min_value=int(df['poblacion'].min()), max_value=int(df['poblacion'].max()), value=(int(df['poblacion'].min()), int(df['poblacion'].max())))
-filtered_df = filtered_df[(filtered_df['poblacion'] >= min_population) & (filtered_df['poblacion'] <= max_population)]
+try:
+    # Filtrado de datos por región
+    regiones = df['region'].unique()
+    selected_regions = st.multiselect('Seleccione las regiones para visualizar', regiones)
 
-# Selección de múltiples estados para comparación
-selected_states = st.multiselect('Seleccione los estados para comparar', filtered_df['estado'].unique())
+    if selected_regions:
+        filtered_df = df[df['region'].isin(selected_regions)]
+    else:
+        filtered_df = df
 
-if selected_states:
-    comparison_df = filtered_df[filtered_df['estado'].isin(selected_states)]
-else:
-    comparison_df = pd.DataFrame(columns=df.columns)
+    # Filtrado de datos por población
+    min_population, max_population = st.slider('Rango de población', min_value=int(df['poblacion'].min()), max_value=int(df['poblacion'].max()), value=(int(df['poblacion'].min()), int(df['poblacion'].max())))
+    filtered_df = filtered_df[(filtered_df['poblacion'] >= min_population) & (filtered_df['poblacion'] <= max_population)]
 
-# Crear el mapa base
-m = folium.Map(location=[filtered_df['lat'].mean(), filtered_df['lon'].mean()], zoom_start=6)
+    # Selección de múltiples estados para comparación
+    selected_states = st.multiselect('Seleccione los estados para comparar', filtered_df['estado'].unique())
 
-# Agregar puntos al mapa
-for _, row in filtered_df.iterrows():
-    folium.Marker(
-        location=[row['lat'], row['lon']],
-        popup=f"Estado: {row['estado']}<br>Población: {row['poblacion']}"
-    ).add_to(m)
+    if selected_states:
+        comparison_df = filtered_df[filtered_df['estado'].isin(selected_states)]
+    else:
+        comparison_df = pd.DataFrame(columns=df.columns)
 
-# Mostrar el mapa
-folium_static(m)
+    # Crear el mapa base
+    m = folium.Map(location=[filtered_df['lat'].mean(), filtered_df['lon'].mean()], zoom_start=6)
 
-# Generar gráficos comparativos si hay estados seleccionados
-if not comparison_df.empty:
-    st.subheader('Comparación de Estados Seleccionados')
+    # Agregar puntos al mapa
+    for _, row in filtered_df.iterrows():
+        folium.Marker(
+            location=[row['lat'], row['lon']],
+            popup=f"Estado: {row['estado']}<br>Población: {row['poblacion']}"
+        ).add_to(m)
 
-    # Gráfico de barras de la población
-    fig = px.bar(comparison_df, x='estado', y='poblacion', title='Población de los Estados Seleccionados')
-    st.plotly_chart(fig)
+    # Mostrar el mapa
+    folium_static(m)
 
-    # Gráfico de pie de la población por región
-    fig_pie = px.pie(comparison_df, names='region', values='poblacion', title='Distribución de la Población por Región')
-    st.plotly_chart(fig_pie)
+    # Generar gráficos comparativos si hay estados seleccionados
+    if not comparison_df.empty:
+        st.subheader('Comparación de Estados Seleccionados')
 
-    # Tabla comparativa de los estados seleccionados
-    st.write('Tabla Comparativa de Estados Seleccionados')
-    st.write(comparison_df)
+        # Gráfico de barras de la población
+        fig = px.bar(comparison_df, x='estado', y='poblacion', title='Población de los Estados Seleccionados')
+        st.plotly_chart(fig)
+
+        # Gráfico de pie de la población por región
+        fig_pie = px.pie(comparison_df, names='region', values='poblacion', title='Distribución de la Población por Región')
+        st.plotly_chart(fig_pie)
+
+        # Tabla comparativa de los estados seleccionados
+        st.write('Tabla Comparativa de Estados Seleccionados')
+        st.write(comparison_df)
+
+except NameError:
+    st.error("Error variables vacías")
