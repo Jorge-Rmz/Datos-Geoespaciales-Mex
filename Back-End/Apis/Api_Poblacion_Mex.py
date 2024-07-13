@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 import pandas as pd
-from Redis_api import connect_redis, get_data_from_redis,load_data_from_csv
+from Redis_api import connect_redis, get_data_from_redis, load_data_from_csv
 
 app = Flask(__name__)
 
@@ -16,7 +16,6 @@ data_key = 'geospatial_data'
 def load_data():
     try:
         df = load_data_from_csv(file_path)
-        save_data_to_redis(r, data_key, df)
         return jsonify({"message": "Datos cargados desde el archivo CSV y guardados en Redis."})
     except FileNotFoundError:
         return jsonify({"error": "El archivo de datos no se encuentra."}), 500
