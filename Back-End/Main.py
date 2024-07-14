@@ -12,6 +12,7 @@ def fetch_data():
         print(f"Error: {response.status_code}")
         print(response.json())
 
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 
