@@ -1,22 +1,29 @@
-version: '3'
-services:
-  redis:
-    image: redis:latest
-    container_name: redis
-    ports:
-      - "6379:6379"
+version: '3.8'
 
-  servicio1:
+services:
+  frontend:
     build:
-      context: ./back-end
+      context: ./Front-End
       dockerfile: Dockerfile
-    container_name: contenedor1
     ports:
       - "8501:8501"
-    volumes:
-      - ./back-end:/app
+    depends_on:
+      - backend
+      - redis
+
+  backend:
+    build:
+      context: ./Back-End
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
     depends_on:
       - redis
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
