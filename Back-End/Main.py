@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import Apis.BackendTrabajoDomestico as TrabajoDomestico
 import Apis.ApiConsumoElectrico as ConsumoElectrico
+import Apis.Api_Poblacion_Mex as pm
 import pandas as pd
 
 app = Flask(__name__)
@@ -8,6 +9,18 @@ app = Flask(__name__)
 @app.route('/')
 def index():
     return 'API Funcionando'
+
+
+@app.route('/api/get_poblacion_mex', methods=['GET'])
+def get_poblacion():
+    try:
+        df = pm.load_data()
+        return jsonify(df.to_dict(orient='records'))
+    except FileNotFoundError:
+        return jsonify({"error": "El archivo de datos no se encuentra."}), 500
+    except Exception as e:
+        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+
 
 @app.route('/get_consumo_electrico', methods=['GET'])
 def get_consumo_electrico():
@@ -18,6 +31,7 @@ def get_consumo_electrico():
         return jsonify({"error": "El archivo de datos no se encuentra."}), 500
     except Exception as e:
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+
 
 @app.route('/post_consumo_electrico', methods=['POST'])
 def post_consumo_electrico():

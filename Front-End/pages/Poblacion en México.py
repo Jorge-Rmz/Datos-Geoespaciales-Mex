@@ -13,30 +13,69 @@ data_key = 'geospatial_data1'
 file_path = "Back-End/datos/data.csv"
 
 # Conectar a Redis
-r = redis.Redis(host='localhost', port=6379, db=0)
+redis_host = "localhost"
+redis_port = 6379
+
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
+
+def is_redis_available():
+    try:
+        redis_client.ping()
+        return True
+    except redis.ConnectionError:
+        return False
+
+
+def save_data_to_redis(redis_conn, key, df):
+    redis_conn.set(key, json.dumps(df.to_dict(orient='records')))
+
+
+def get_data_from_redis(redis_conn, key):
+    if redis_conn.exists(key):
+        return pd.DataFrame(json.loads(redis_conn.get(key)))
+    return None
+
+
+def load_data_from_csv(file_path):
+    return pd.read_csv(file_path)
+
+
 
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
 
 def load_data_from_csv(file_path):
     df = pd.read_csv(file_path)
-    r.set(data_key, json.dumps(df.to_dict(orient='records')))
-    st.write("Datos cargados desde el archivo CSV y guardados en Redis")
+    # redis_client.set(data_key, json.dumps(df.to_dict(orient='records')))
+    st.write("Datos cargados desde el archivo CSV")
     return df
 
+
 def load_data_from_redis():
-    if r.exists(data_key):
-        df = pd.DataFrame(json.loads(r.get(data_key)))
-        st.success("Datos cargados desde Redis")
-        return df
-    else:
-        st.error("Datos no encontrados en Redis")
+    try:
+        if is_redis_available():
+            if redis_client.exists(data_key):
+                df = pd.DataFrame(json.loads(redis_client.get(data_key)))
+                st.success("Datos cargados desde Redis")
+                return df
+            else:
+                save_data_to_redis(redis_client, data_key, pd.read_csv(file_path))
+                df = get_data_from_redis(redis_client, data_key)
+                st.success("Datos cargados desde Redis")
+                return df
+        else:
+            st.error("No se pudo conectar a Redis. Cargando desde el archivo CSV...")
+            return load_data_from_csv(file_path)
+    except redis.exceptions.ConnectionError:
+        st.error("Error al conectar con Redis. Verifica que Redis esté disponible.")
         return None
+
 
 def load_data():
     try:
         # Verificar si los datos están en la API
-        response = requests.get(f"{api_url}/api/get_data")
+        response = requests.get(f"{api_url}/api/get_poblacion_mex")
 
         if response.status_code == 200:
             df = pd.DataFrame(response.json())

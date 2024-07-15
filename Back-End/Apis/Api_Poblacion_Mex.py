@@ -1,31 +1,29 @@
-from Redis_api import connect_redis, fetch_data_from_redis, load_data_from_csv, save_data_to_redis
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+import pandas as pd
+import redis
+import json
 
 app = Flask(__name__)
 
-r = connect_redis()
 
-file_path = "Back-End/datos/data.csv"
+# Ruta del archivo CSV
+file_path = "datos/data.csv"
 data_key = 'geospatial_data1'
 
-@app.route('/api/load_data', methods=['GET'])
-def load_data_to_redis():
+def load_data():
     try:
-        df = load_data_from_csv(file_path)
-        save_data_to_redis(r, data_key, df)
-        return jsonify({"message": "Datos cargados desde el archivo CSV y guardados en Redis."})
-    except FileNotFoundError:
-        return jsonify({"error": "El archivo de datos no se encuentra."}), 500
-    except Exception as e:
-        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+        # Carga el archivo CSV con datos
+        df = pd.read_csv(file_path, encoding='utf-8')
 
-@app.route('/api/get_data', methods=['GET'])
-def fetch_data_from_redis_route():
-    try:
-        df = fetch_data_from_redis(r, data_key)
-        if df is not None:
-            return jsonify(df.to_dict(orient='records'))
-        else:
-            return jsonify({"error": "Datos no encontrados en Redis."}), 404
+        return df
+
+    except FileNotFoundError:
+        raise FileNotFoundError(f"El archivo {file_path} no se encontró.")
+    except pd.errors.ParserError:
+        raise ValueError(f"Error al parsear el archivo {file_path}.")
     except Exception as e:
-        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+        raise Exception(f"Ocurrió un error: {e}")
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
