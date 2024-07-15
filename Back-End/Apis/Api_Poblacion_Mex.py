@@ -29,6 +29,3 @@ def fetch_data_from_redis_route():
             return jsonify({"error": "Datos no encontrados en Redis."}), 404
     except Exception as e:
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)

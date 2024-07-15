@@ -27,13 +27,4 @@ def load_data():
     except Exception as e:
         raise Exception(f"Ocurrió un error: {e}")
 
-@app.route('/get_data', methods=['GET'])
-def get_data():
-    try:
-        df = load_data()
-        return jsonify(df.to_dict(orient='records'))
-    except FileNotFoundError:
-        return jsonify({"error": "El archivo de datos no se encuentra."}), 500
-    except Exception as e:
-        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
 

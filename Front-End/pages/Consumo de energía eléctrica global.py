@@ -1,12 +1,20 @@
+import pickle
 import streamlit as st
 import pandas as pd
+import folium
+from streamlit_folium import folium_static
 import plotly.express as px
+import requests
 import redis
-import pickle
+import json
 
 redis_host = "localhost"
 redis_port = 6379
 redis_password = ""
+
+file_path = 'Back-End/datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv'
+data_key = "data_consumo_electrico"
+url = "http://localhost:5000/get_consumo_electrico"
 
 r = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, decode_responses=False)
 
@@ -23,6 +31,12 @@ def load_data(file_path):
     df = df.rename(columns=column_rename)
     return df
 
+def get_data_from_api(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return None
+
 def get_data_from_redis(key):
     cached_data = r.get(key)
     if cached_data:
@@ -35,13 +49,15 @@ def set_data_to_redis(key, data):
 st.title('Visualizador de Consumo de energía eléctrica global')
 st.markdown('En esta sección, se mostrará un análisis del consumo de energía eléctrica global en kilowatts/hora.')
 
-file_path = 'Back-End/datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv'
-data_key = "energy_consumption_data"
-
 df = get_data_from_redis(data_key)
 if df is None:
-    df = load_data(file_path)
-    set_data_to_redis(data_key, df)
+    data = get_data_from_api(url)
+    if data is not None:
+        df = load_data(file_path)
+        set_data_to_redis(data_key, df)
+    else:
+        st.write('No se pudo obtener los datos de la API.')
+        st.stop()
 
 years = [str(year) for year in range(1960, 2015)]
 renamed_years = [f'Año {year}' for year in years]
