@@ -44,7 +44,7 @@ def load_data():
 
     try:
         response = requests.get(backend_url)
-        response.raise_for_status()  # Verifica errores de la respuesta
+        response.raise_for_status()
         data = response.json()
         df = pd.DataFrame(data)
         # Almacena datos en Redis si está disponible
@@ -60,7 +60,7 @@ def load_data():
 # Obtiene los datos del backend o desde Redis
 df = load_data()
 
-# Mostrar la tabla completa inicialmente
+# Mostrar la tabla
 if df is not None:
     st.write("Datos Completos:")
     st.dataframe(df)
