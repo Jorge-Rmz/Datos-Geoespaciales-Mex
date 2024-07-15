@@ -36,7 +36,7 @@ def load_data_from_redis():
 def load_data():
     try:
         # Verificar si los datos están en la API
-        response = requests.get(f"{api_url}/get_data")
+        response = requests.get(f"{api_url}/api/get_data")
 
         if response.status_code == 200:
             df = pd.DataFrame(response.json())
