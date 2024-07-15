@@ -1,58 +1,61 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import requests
 import redis
 from io import StringIO
 
-# Conecta a Redis
-try:
-    redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
-    redis_client.ping()  # Verifica la conexión
-    st.success("Conectado a Redis")
-except redis.ConnectionError as e:
-    st.error(f"No se pudo conectar a Redis: {e}")
+redis_host = "localhost"
+redis_port = 6379
+
+# Conectar a Redis
+redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
 # Título de la aplicación
-st.title('Visualizador de población por sexo y nacionalidad')
+st.title('Poblacion por Sexo y Nacionalidad')
 
-# Ruta del archivo CSV
-file_path = "Back-End/datos/66375.csv"
+# URL del backend
+backend_url = "http://localhost:5000/get_poblacion_data"
 
+# Función para verificar si Redis está disponible
+def is_redis_available():
+    try:
+        redis_client.ping()
+        return True
+    except redis.ConnectionError:
+        return False
+
+# Función para cargar los datos desde el backend o Redis
 def load_data():
-    try:
-        # Carga el archivo CSV con datos
-        df = pd.read_csv(file_path, encoding='utf-8', delimiter=';', thousands=',')
+    redis_available = is_redis_available()
 
-        # Almacena en Redis
-        redis_client.set('data', df.to_json(orient='split'))
-
-        st.write(df.head())
-        st.write("Columnas del DataFrame después de cargar el CSV:", df.columns)
-
-        return df
-
-    except FileNotFoundError:
-        st.error(f"El archivo {file_path} no se encontró. Asegúrate de que el archivo está en el directorio correcto.")
-    except pd.errors.ParserError:
-        st.error(f"Hubo un error al intentar parsear el archivo {file_path}. Verifica el formato del archivo CSV.")
-    except Exception as e:
-        st.error(f"Ocurrió un error: {e}")
-        return None
-
-def get_data():
-    try:
+    if redis_available:
+        st.success("Conectado a Redis")
         data = redis_client.get('data')
         if data:
-            df = pd.read_json(StringIO(data), orient='split')
-            return df
+            st.info("Mostrando datos de Redis")
+            return pd.read_json(StringIO(data), orient='split')
         else:
-            return load_data()
-    except redis.ConnectionError as e:
-        st.error(f"No se pudo conectar a Redis para obtener los datos: {e}")
-        return load_data()
+            st.info("Intentando cargar datos desde el backend")
+    else:
+        st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
 
-# Obtiene los datos de Redis o los carga si no existen
-df = get_data()
+    try:
+        response = requests.get(backend_url)
+        response.raise_for_status()
+        data = response.json()
+        df = pd.DataFrame(data)
+        # Almacena datos en Redis si está disponible
+        if redis_available:
+            redis_client.set('data', df.to_json(orient='split'))
+        st.info("Mostrando datos del backend")
+        return df
+    except requests.RequestException:
+        st.error("No se pudo obtener datos del backend ni de Redis")
+        return None
+
+# Obtiene los datos del backend o desde Redis
+df = load_data()
 
 # Filtrado de datos por periodo
 if df is not None:
