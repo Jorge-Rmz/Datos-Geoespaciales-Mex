@@ -125,7 +125,7 @@ with st.form(key='add_record_form'):
         }
 
         # Llamada a la API para agregar el nuevo registro
-        response = requests.post("http://localhost:5000/post_poblacion", json=new_data)
+        response = requests.post("http://Backend:5000/post_poblacion", json=new_data)
 
         if response.status_code == 200:
             st.success("Registro agregado correctamente")
