@@ -5,6 +5,7 @@ import requests
 import redis
 from io import StringIO
 
+# Configuración de Redis
 redis_host = "localhost"
 redis_port = 6379
 
@@ -17,7 +18,6 @@ st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 # URL del backend
 backend_url = "http://localhost:5000/get_data"
 
-
 # Función para verificar si Redis está disponible
 def is_redis_available():
     try:
@@ -25,7 +25,6 @@ def is_redis_available():
         return True
     except redis.ConnectionError:
         return False
-
 
 # Función para cargar los datos desde el backend o Redis
 def load_data():
@@ -36,26 +35,57 @@ def load_data():
         data = redis_client.get('data')
         if data:
             st.info("Mostrando datos de Redis")
-            return pd.read_json(StringIO(data), orient='split')
+            redis_df = pd.read_json(StringIO(data), orient='split', encoding='utf-8')
         else:
-            st.info("Intentando cargar datos desde el backend")
+            redis_df = pd.DataFrame()
+            st.info("No hay datos en Redis")
     else:
         st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
+        redis_df = pd.DataFrame()
 
     try:
         response = requests.get(backend_url)
         response.raise_for_status()
         data = response.json()
-        df = pd.DataFrame(data)
-        # Almacena datos en Redis si está disponible
-        if redis_available:
-            redis_client.set('data', df.to_json(orient='split'))
-        st.info("Mostrando datos del backend")
-        return df
+        backend_df = pd.DataFrame(data)
+
+        if not redis_df.empty:
+            # Asegurarse de que ambos DataFrames tengan las mismas columnas
+            common_columns = redis_df.columns.intersection(backend_df.columns)
+            redis_df = redis_df[common_columns]
+            backend_df = backend_df[common_columns]
+
+            # Encontrar datos nuevos o actualizados
+            merged_df = backend_df.merge(redis_df, indicator=True, how='outer', on=common_columns.tolist())
+            new_or_updated_df = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+
+            if not new_or_updated_df.empty:
+                # Combinar los datos nuevos con los existentes en Redis
+                combined_df = pd.concat([redis_df, new_or_updated_df]).drop_duplicates().reset_index(drop=True)
+                # Actualizar Redis con solo los nuevos datos o editados
+                redis_client.set('data', combined_df.to_json(orient='split'))
+                st.info("Datos actualizados en Redis con nuevos registros")
+                return combined_df
+            else:
+                st.info("No hay datos nuevos para agregar a Redis")
+                return redis_df
+        else:
+            if redis_available:
+                redis_client.set('data', backend_df.to_json(orient='split'))
+                st.info("Datos guardados en Redis por primera vez")
+            return backend_df
+
     except requests.RequestException:
         st.error("No se pudo obtener datos del backend ni de Redis")
-        return None
+        if not redis_df.empty:
+            st.info("Mostrando datos de Redis almacenados previamente")
+            return redis_df
+        else:
+            return None
 
+# Botón para refrescar los datos
+if st.button('Refrescar Datos'):
+    st.experimental_rerun()
 
 # Obtiene los datos del backend o desde Redis
 df = load_data()
@@ -88,23 +118,27 @@ if df is not None:
             if not comparison_df.empty:
                 st.subheader('Comparación de Entidades Seleccionadas')
 
-                # Gráfico circular del porcentaje de horas dedicadas a actividades domésticas y de cuidado
-                if 'Horas Domésticas y Cuidado' in df.columns:
-                    fig = px.pie(comparison_df, names='Entidad federativa', values='Horas Domésticas y Cuidado',
+                # Verificar si las columnas necesarias existen y no están vacías
+                if 'Horas Domesticas y Cuidado' in comparison_df.columns and not comparison_df['Horas Domesticas y Cuidado'].isnull().all():
+                    fig = px.pie(comparison_df, names='Entidad federativa', values='Horas Domesticas y Cuidado',
                                  title='Horas a actividades domésticas y de cuidado')
                     st.plotly_chart(fig)
+                else:
+                    st.warning("No hay datos suficientes para 'Horas Domésticas y Cuidado'.")
 
-                # Gráfico circular de la tasa de participación en trabajo doméstico no remunerado
-                if 'Tasa Trabajo Doméstico' in df.columns:
-                    fig2 = px.pie(comparison_df, names='Entidad federativa', values='Tasa Trabajo Doméstico',
+                if 'Tasa Trabajo Domestico' in comparison_df.columns and not comparison_df['Tasa Trabajo Domestico'].isnull().all():
+                    fig2 = px.pie(comparison_df, names='Entidad federativa', values='Tasa Trabajo Domestico',
                                   title='Participación en trabajo doméstico no remunerado')
                     st.plotly_chart(fig2)
+                else:
+                    st.warning("No hay datos suficientes para 'Tasa Trabajo Doméstico'.")
 
-                # Gráfico circular de la tasa de participación en trabajo no remunerado de cuidado
-                if 'Tasa Trabajo Cuidado' in df.columns:
+                if 'Tasa Trabajo Cuidado' in comparison_df.columns and not comparison_df['Tasa Trabajo Cuidado'].isnull().all():
                     fig3 = px.pie(comparison_df, names='Entidad federativa', values='Tasa Trabajo Cuidado',
                                   title='Participación en trabajo no remunerado de cuidado')
                     st.plotly_chart(fig3)
+                else:
+                    st.warning("No hay datos suficientes para 'Tasa Trabajo Cuidado'.")
 
                 # Tabla comparativa de las entidades seleccionadas
                 st.write('Tabla Comparativa de Entidades Seleccionadas')
