@@ -8,7 +8,7 @@ from io import StringIO
 # Configuración de Redis
 redis_host = "localhost"
 redis_port = 6379
-
+data_key = "data"
 # Conectar a Redis
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
@@ -16,7 +16,7 @@ redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=Tr
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
 # URL del backend
-backend_url = "http://localhost:5000/get_data"
+backend_url = "http://localhost:5000/get_data_trabajo_domestico"
 
 # Función para verificar si Redis está disponible
 def is_redis_available():
@@ -32,7 +32,7 @@ def load_data():
 
     if redis_available:
         st.success("Conectado a Redis")
-        data = redis_client.get('data')
+        data = redis_client.get(data_key)
         if data:
             st.info("Mostrando datos de Redis")
             redis_df = pd.read_json(StringIO(data), orient='split', encoding='utf-8')
@@ -55,23 +55,23 @@ def load_data():
             redis_df = redis_df[common_columns]
             backend_df = backend_df[common_columns]
 
-            # Encontrar datos nuevos o actualizados
-            merged_df = backend_df.merge(redis_df, indicator=True, how='outer', on=common_columns.tolist())
-            new_or_updated_df = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+            # Se identifica filas editadas
+            updated_df = pd.merge(backend_df, redis_df, on=common_columns.tolist(), how='outer', indicator=True)
+            updated_df = updated_df[updated_df['_merge'] == 'left_only'].drop(columns=['_merge'])
 
-            if not new_or_updated_df.empty:
-                # Combinar los datos nuevos con los existentes en Redis
-                combined_df = pd.concat([redis_df, new_or_updated_df]).drop_duplicates().reset_index(drop=True)
-                # Actualizar Redis con solo los nuevos datos o editados
-                redis_client.set('data', combined_df.to_json(orient='split'))
-                st.info("Datos actualizados en Redis con nuevos registros")
-                return combined_df
+            if not updated_df.empty:
+                # Reemplazar filas editadas en Redis
+                redis_df.update(updated_df)
+                # Guardar datos actualizados en Redis
+                redis_client.set(data_key, redis_df.to_json(orient='split'))
+                st.info("Datos actualizados en Redis")
+                return redis_df
             else:
-                st.info("No hay datos nuevos para agregar a Redis")
+                st.info("No hay datos nuevos ni editados para actualizar en Redis")
                 return redis_df
         else:
             if redis_available:
-                redis_client.set('data', backend_df.to_json(orient='split'))
+                redis_client.set(data_key, backend_df.to_json(orient='split'))
                 st.info("Datos guardados en Redis por primera vez")
             return backend_df
 

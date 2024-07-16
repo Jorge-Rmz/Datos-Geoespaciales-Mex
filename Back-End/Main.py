@@ -46,7 +46,7 @@ def post_consumo_electrico():
     except Exception as e:
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
 
-@app.route('/get_data', methods=['GET'])
+@app.route('/get_data_trabajo_domestico', methods=['GET'])
 def get_data():
     try:
         df = TrabajoDomestico.load_data()
