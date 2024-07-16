@@ -8,7 +8,7 @@ from io import StringIO
 # Configuración de Redis
 redis_host = "redis"
 redis_port = 6379
-data_key = "data"
+data_key = "data_Trabajo_domestico"
 # Conectar a Redis
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
