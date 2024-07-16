@@ -3,6 +3,7 @@ import Apis.BackendTrabajoDomestico as TrabajoDomestico
 import Apis.ApiConsumoElectrico as ConsumoElectrico
 import Apis.Api_Poblacion_Mex as pm
 import Apis.ApiPoblacionPorSexo as Poblacion
+import Apis.ApiPIB as PIB
 import pandas as pd
 
 app = Flask(__name__)
@@ -59,6 +60,16 @@ def get_data():
 def get_poblacion_data():
     try:
         df = Poblacion.load_data()
+        return jsonify(df.to_dict(orient='records'))
+    except FileNotFoundError:
+        return jsonify({"error": "El archivo de datos no se encuentra."}), 500
+    except Exception as e:
+        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+
+@app.route('/get_pib_data', methods=['GET'])
+def get_pib_data():
+    try:
+        df = PIB.load_data()
         return jsonify(df.to_dict(orient='records'))
     except FileNotFoundError:
         return jsonify({"error": "El archivo de datos no se encuentra."}), 500
