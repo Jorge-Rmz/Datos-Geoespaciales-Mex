@@ -13,7 +13,6 @@ import io
 # URL de la API Flask
 api_url = "http://Backend:5000"
 data_key = 'geospatial_data1'
-file_path = "datos/data.csv"
 
 # Conectar a Redis
 redis_host = "redis"
@@ -109,27 +108,15 @@ def edit_data_in_redis(updated_data):
     except Exception as e:
         st.error(f"Error al actualizar datos en Redis: {e}")
 
-def load_data_from_csv(file_path):
-    df = pd.read_csv(file_path)
-    # redis_client.set(data_key, json.dumps(df.to_dict(orient='records')))
-    st.write("Datos cargados desde el archivo CSV")
-    return df
 
 def load_data_from_redis():
     try:
         if is_redis_available():
-            if redis_client.exists(data_key):
-                df = pd.DataFrame(json.loads(redis_client.get(data_key)))
-                st.success("Datos cargados desde Redis")
-                return df
-            else:
-                save_data_to_redis(redis_client, data_key, pd.read_csv(file_path))
-                df = get_data_from_redis(redis_client, data_key)
-                st.success("Datos cargados desde Redis")
-                return df
+            df = pd.DataFrame(json.loads(redis_client.get(data_key)))
+            st.success("Datos cargados desde Redis")
+            return df
         else:
-            st.error("No se pudo conectar a Redis. Cargando desde el archivo CSV...")
-            return load_data_from_csv(file_path)
+            st.error("No se pudo conectar a Redis. ")
     except redis.exceptions.ConnectionError:
         st.error("Error al conectar con Redis. Verifica que Redis esté disponible.")
         return None
@@ -304,8 +291,7 @@ if df is not None:
 
 else:
     # Si no hay datos, intenta cargar desde el CSV
-    st.error("Cargando datos desde el archivo CSV")
-    df = load_data_from_csv(file_path)
+    st.error("Error al cargar los datos")
 
     if df is not None:
         st.write(df)
