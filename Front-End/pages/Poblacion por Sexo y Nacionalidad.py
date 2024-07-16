@@ -31,7 +31,7 @@ def load_data():
 
     if redis_available:
         st.success("Conectado a Redis")
-        data = redis_client.get('poblacion_data')  # Clave única
+        data = redis_client.get('poblacion_data')
         if data:
             st.info("Mostrando datos de Redis")
             return pd.read_json(StringIO(data), orient='split')
@@ -45,7 +45,7 @@ def load_data():
         df = pd.DataFrame(data)
         # Almacena datos en Redis si está disponible
         if redis_available:
-            redis_client.set('poblacion_data', df.to_json(orient='split'))  # Clave única
+            redis_client.set('poblacion_data', df.to_json(orient='split'))
         st.info("Mostrando datos del backend")
         return df
     except requests.RequestException:
@@ -55,21 +55,21 @@ def load_data():
 # Obtiene los datos del backend o desde Redis
 df_poblacion = load_data()
 
+# Mostrar la tabla completa
+if df_poblacion is not None:
+    st.write("Datos Completos:")
+    st.dataframe(df_poblacion)  # Muestra todos los datos
+
 # Filtrado de datos por periodo
 if df_poblacion is not None:
     if 'Periodo' in df_poblacion.columns:
-        df_poblacion['Periodo'] = df_poblacion['Periodo'].astype(str).str.replace(',', '')  # Remover comas
+        df_poblacion['Periodo'] = df_poblacion['Periodo'].astype(str).str.replace(',', '')
         periodos = df_poblacion['Periodo'].unique()
         selected_period = st.selectbox('Seleccione el periodo para visualizar', periodos)
 
         filtered_df = df_poblacion[df_poblacion['Periodo'] == selected_period]
 
-        # Mostrar las columnas del DataFrame filtrado
-        st.write("Columnas en filtered_df:", filtered_df.columns)
-
-        # Verifica si la columna 'Nacionalidad' está presente
         if 'Nacionalidad' in filtered_df.columns:
-            # Selección de múltiples nacionalidades para comparación
             selected_nacionalidades = st.multiselect('Seleccione las nacionalidades para comparar', filtered_df['Nacionalidad'].unique())
 
             if selected_nacionalidades:
@@ -77,10 +77,14 @@ if df_poblacion is not None:
             else:
                 comparison_df = pd.DataFrame(columns=df_poblacion.columns)
 
-            # Generar gráficos si hay datos seleccionados
             if not comparison_df.empty:
-                st.subheader('Total de población por nacionalidad')
 
+                st.write('Tabla Comparativa de Nacionalidades Seleccionadas')
+                comparison_df_display = comparison_df.copy()
+                comparison_df_display['Periodo'] = comparison_df_display['Periodo'].astype(str).str.replace(',', '')
+                st.write(comparison_df_display)
+
+                st.subheader('Total de población por nacionalidad')
                 fig = px.pie(comparison_df, values='Total', names='Nacionalidad', title='Distribución de la población total por nacionalidad')
                 st.plotly_chart(fig)
 
@@ -89,12 +93,6 @@ if df_poblacion is not None:
 
                 fig3 = px.pie(comparison_df, values='Total', names='Nacionalidad', title=f'Evolución de la población en el período {selected_period}')
                 st.plotly_chart(fig3)
-
-                # Mostrar tabla comparativa sin comas en la columna 'Periodo'
-                st.write('Tabla Comparativa de Nacionalidades Seleccionadas')
-                comparison_df_display = comparison_df.copy()
-                comparison_df_display['Periodo'] = comparison_df_display['Periodo'].astype(str).str.replace(',', '')
-                st.write(comparison_df_display)
             else:
                 st.warning("No hay datos seleccionados.")
         else:
