@@ -69,6 +69,9 @@ if df_poblacion is not None:
 
         filtered_df = df_poblacion[df_poblacion['Periodo'] == selected_period]
 
+        # Elimina o comenta la siguiente línea para no mostrar las columnas del DataFrame filtrado
+        # st.write("Columnas en filtered_df:", filtered_df.columns)
+
         if 'Nacionalidad' in filtered_df.columns:
             selected_nacionalidades = st.multiselect('Seleccione las nacionalidades para comparar', filtered_df['Nacionalidad'].unique())
 
@@ -78,13 +81,13 @@ if df_poblacion is not None:
                 comparison_df = pd.DataFrame(columns=df_poblacion.columns)
 
             if not comparison_df.empty:
-
                 st.write('Tabla Comparativa de Nacionalidades Seleccionadas')
                 comparison_df_display = comparison_df.copy()
                 comparison_df_display['Periodo'] = comparison_df_display['Periodo'].astype(str).str.replace(',', '')
                 st.write(comparison_df_display)
 
                 st.subheader('Total de población por nacionalidad')
+
                 fig = px.pie(comparison_df, values='Total', names='Nacionalidad', title='Distribución de la población total por nacionalidad')
                 st.plotly_chart(fig)
 
