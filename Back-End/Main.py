@@ -66,6 +66,18 @@ def get_poblacion_data():
     except Exception as e:
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
 
+@app.route('/post_poblacion', methods=['POST'])
+def post_poblacion():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No se proporcionaron datos"}), 400
+        result = Poblacion.add_new_record(data)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+
+
 @app.route('/get_pib_data', methods=['GET'])
 def get_pib_data():
     try:

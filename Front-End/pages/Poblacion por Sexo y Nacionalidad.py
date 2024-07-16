@@ -104,3 +104,37 @@ if df_poblacion is not None:
         st.error("La columna 'Periodo' no se encuentra en el DataFrame.")
 else:
     st.error("Error al obtener los datos.")
+
+# Formulario para agregar nuevo registro
+st.subheader("Agregar Nuevo Registro")
+
+with st.form(key='add_record_form'):
+    sexo = st.selectbox('Sexo', options=['Masculino', 'Femenino'])
+    nacionalidad = st.text_input('Nacionalidad')
+    periodo = st.text_input('Periodo')
+    total = st.number_input('Total', min_value=0)
+
+    submit_button = st.form_submit_button(label='Agregar Registro')
+
+    if submit_button:
+        new_data = {
+            "Sexo": sexo,
+            "Nacionalidad": nacionalidad,
+            "Periodo": periodo,
+            "Total": total
+        }
+
+        # Llamada a la API para agregar el nuevo registro
+        response = requests.post("http://localhost:5000/post_poblacion", json=new_data)
+
+        if response.status_code == 200:
+            st.success("Registro agregado correctamente")
+            # Actualiza los datos en Redis
+            redis_client.set('poblacion_data', df_poblacion.to_json(orient='split'))
+        else:
+            st.error(f"Error al agregar registro: {response.json().get('error')}")
+
+# Mostrar la tabla actualizada
+if df_poblacion is not None:
+    st.write("Datos Actualizados:")
+    st.dataframe(df_poblacion)
