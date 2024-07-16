@@ -11,17 +11,20 @@ redis_port = 6379
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
 # Título de la aplicación
-st.title('Visualizador de datos del PIB en el mundo')
+st.title('PIB')
 
 # URL del backend
 backend_url = "http://localhost:5000/get_pib_data"
 
+
+# Función para verificar si Redis está disponible
 def is_redis_available():
     try:
         redis_client.ping()
         return True
     except redis.ConnectionError:
         return False
+
 
 # Función para cargar los datos desde el backend o Redis
 def load_data():
@@ -58,11 +61,11 @@ df = load_data()
 
 if df is not None:
     # Filtrado de datos por país
-    countries = df['Country'].unique()
+    countries = df['Country Name'].unique()
     selected_countries = st.multiselect('Seleccione los países para visualizar', countries)
 
     if selected_countries:
-        filtered_df = df[df['Country'].isin(selected_countries)]
+        filtered_df = df[df['Country Name'].isin(selected_countries)]
         st.write(filtered_df)
     else:
         filtered_df = df
@@ -75,4 +78,4 @@ if df is not None:
     selected = st.selectbox("Año", range, index=0)
 
     # Gráfica de PIB en el mundo por Año
-    st.bar_chart(df, x="Country", y=str(selected), horizontal=True)
+    st.bar_chart(df, x="Country Name", y=str(selected), horizontal=True)
