@@ -21,6 +21,23 @@ redis_port = 6379
 
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
+
+def download_csv_from_redis():
+    if is_redis_available():
+        data = get_data_from_redis(redis_client, data_key)
+        if data is not None:
+            csv_buffer = io.StringIO()
+            data.to_csv(csv_buffer, index=False, sep=',')
+            csv_buffer.seek(0)
+            return csv_buffer.getvalue().encode('utf-8')
+        else:
+            st.warning("No hay datos disponibles para descargar")
+            return None
+    else:
+        st.error("No se pudo conectar a Redis. No se pueden descargar los datos.")
+        return None
+
+
 def is_redis_available():
     try:
         redis_client.ping()
@@ -48,6 +65,16 @@ def validar_coordenadas(latitud, longitud):
 
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
+
+# Botón para descargar datos desde Redis
+csv_data = download_csv_from_redis()
+if csv_data:
+    st.download_button(
+        label="Descargar CSV desde Redis",
+        data=csv_data,
+        file_name='datos_geoespaciales.csv',
+        mime='text/csv'
+    )
 
 def add_data_to_redis(new_data):
     try:
@@ -131,36 +158,11 @@ def load_data():
         return None
 
 
-def download_csv_from_redis():
-    if is_redis_available():
-        data = get_data_from_redis(redis_client, data_key)
-        if data is not None:
-            csv_buffer = io.StringIO()
-            data.to_csv(csv_buffer, index=False, sep=',', line_terminator='\n')
-            csv_buffer.seek(0)
-            return csv_buffer.getvalue().encode('utf-8')
-        else:
-            st.warning("No hay datos disponibles para descargar")
-            return None
-    else:
-        st.error("No se pudo conectar a Redis. No se pueden descargar los datos.")
-        return None
-
 
 df = load_data()
 
 if df is not None:
     def actualizar_visualizacion(df):
-        st.header('Descargar Datos desde Redis')
-        if st.button('Descargar CSV desde Redis'):
-            csv_data = download_csv_from_redis()
-            if csv_data:
-                st.download_button(
-                    label="Descargar CSV",
-                    data=csv_data,
-                    file_name='datos_geoespaciales.csv',
-                    mime='text/csv'
-                )
 
         # Mostrar los datos
         st.write("Datos completos:")
