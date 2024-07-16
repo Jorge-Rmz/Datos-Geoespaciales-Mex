@@ -11,12 +11,12 @@ import io
 
 
 # URL de la API Flask
-api_url = "http://127.0.0.1:5000"
+api_url = "http://Backend:5000"
 data_key = 'geospatial_data1'
-file_path = "Back-End/datos/data.csv"
+file_path = "datos/data.csv"
 
 # Conectar a Redis
-redis_host = "localhost"
+redis_host = "redis"
 redis_port = 6379
 
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)

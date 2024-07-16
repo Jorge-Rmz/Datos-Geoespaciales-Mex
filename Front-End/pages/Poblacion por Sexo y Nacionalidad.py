@@ -5,7 +5,7 @@ import requests
 import redis
 from io import StringIO
 
-redis_host = "localhost"
+redis_host = "redis"
 redis_port = 6379
 
 # Conectar a Redis
@@ -15,7 +15,7 @@ redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=Tr
 st.title('Población por Sexo y Nacionalidad')
 
 # URL del backend
-backend_url = "http://localhost:5000/get_poblacion_data"
+backend_url = "http://Backend:5000/get_poblacion_data"
 
 # Función para verificar si Redis está disponible
 def is_redis_available():

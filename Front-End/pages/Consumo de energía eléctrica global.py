@@ -5,13 +5,13 @@ import plotly.express as px
 import requests
 import redis
 
-redis_host = "localhost"
+redis_host = "redis"
 redis_port = 6379
 redis_password = ""
 
 data_key = "data_consumo_electrico"
-url = "http://localhost:5000/get_consumo_electrico"
-post_url = "http://localhost:5000/post_consumo_electrico"
+url = "http://Backend:5000/get_consumo_electrico"
+post_url = "http://Backend:5000/post_consumo_electrico"
 
 r = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, decode_responses=False)
 

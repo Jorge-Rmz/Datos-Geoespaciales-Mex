@@ -6,7 +6,7 @@ import redis
 from io import StringIO
 
 # Configuración de Redis
-redis_host = "localhost"
+redis_host = "redis"
 redis_port = 6379
 data_key = "data"
 # Conectar a Redis
@@ -16,7 +16,7 @@ redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=Tr
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
 # URL del backend
-backend_url = "http://localhost:5000/get_data_trabajo_domestico"
+backend_url = "http://Backend:5000/get_data_trabajo_domestico"
 
 # Función para verificar si Redis está disponible
 def is_redis_available():
