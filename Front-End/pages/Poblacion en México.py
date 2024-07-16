@@ -57,6 +57,7 @@ def load_data_from_csv(file_path):
     return pd.read_csv(file_path)
 
 def validar_coordenadas(latitud, longitud):
+    """Valida longitud y latitud para poder marcarlos en el mapa folium"""
     if latitud < -90 or latitud > 90:
         return False
     if longitud < -180 or longitud > 180:
@@ -101,6 +102,7 @@ def edit_data_in_redis(updated_data):
         if is_redis_available():
             save_data_to_redis(redis_client, data_key, updated_data)
             st.success("Datos actualizados exitosamente en Redis")
+            time.sleep(3)
             st.experimental_rerun()  # Recargar la página
         else:
             st.error("No se pudo conectar a Redis. No se han actualizado los datos.")
@@ -253,25 +255,50 @@ if df is not None:
 
     if registros is not None:
         registros_list = registros.to_dict(orient='records')
-        registro_editar = st.selectbox('Seleccione el registro a editar:', registros_list)
+        registro_editar = st.selectbox(
+            'Seleccione el registro a editar:', registros_list,
+            format_func=lambda
+                x: f"{x['estado']} (Población: {x['poblacion']})")
 
         if registro_editar:
-            nuevo_estado_editar = st.text_input('Nuevo Estado:', value=registro_editar['estado'])
-            nueva_poblacion_editar = st.number_input('Nueva Población:', value=registro_editar['poblacion'])
-            nueva_region_editar = st.selectbox('Nueva Región:', df['region'].unique(), index=df['region'].tolist().index(registro_editar['region']))
-            nueva_latitud_editar = st.number_input('Nueva Latitud:', value=registro_editar['lat'])
-            nueva_longitud_editar = st.number_input('Nueva Longitud:', value=registro_editar['lon'])
+            nuevo_estado_editar = st.text_input(
+                'Nuevo Estado:', value=registro_editar['estado'])
+            nueva_poblacion_editar = st.number_input(
+                'Nueva Población:', value=registro_editar['poblacion'])
+
+
+            region_unique = df['region'].unique()
+            data_select = registro_editar['region']
+            index_data_select = region_unique.tolist().index(data_select)
+
+            nueva_region_editar = st.selectbox('Nueva Región:',
+                                               df['region'].unique(),
+                                               index=index_data_select)
+
+            nueva_latitud_editar = st.number_input(
+                'Nueva Latitud:', value=registro_editar['lat'])
+            nueva_longitud_editar = st.number_input(
+                'Nueva Longitud:', value=registro_editar['lon'])
 
             if st.button('Guardar Cambios'):
-                registro_editar['estado'] = nuevo_estado_editar
-                registro_editar['poblacion'] = nueva_poblacion_editar
-                registro_editar['region'] = nueva_region_editar
-                registro_editar['lat'] = nueva_latitud_editar
-                registro_editar['lon'] = nueva_longitud_editar
+                if validar_coordenadas(nueva_latitud_editar, nueva_longitud_editar):
+                    # Actualizar el registro seleccionado con los nuevos valores
+                    for registro in registros_list:
+                        if registro == registro_editar:
+                            registro['estado'] = nuevo_estado_editar
+                            registro['poblacion'] = nueva_poblacion_editar
+                            registro['region'] = nueva_region_editar
+                            registro['lat'] = nueva_latitud_editar
+                            registro['lon'] = nueva_longitud_editar
 
-                # Actualizar datos en Redis
-                updated_data = pd.DataFrame(registros_list)
-                edit_data_in_redis(updated_data)
+                    # Guardar los datos actualizados en Redis
+                    updated_data = pd.DataFrame(registros_list)
+                    edit_data_in_redis(updated_data)
+                else:
+                    st.warning(
+                        'Por favor complete todos los campos o ingrese coordenadas válidas. '
+                        'Latitud debe estar entre -90 y 90. Longitud debe estar entre -180 y 180.'
+                    )
     else:
         st.warning('No hay registros en Redis.')
 
