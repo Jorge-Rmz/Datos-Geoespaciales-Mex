@@ -12,7 +12,7 @@ redis_port = 6379
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
 # Título de la aplicación
-st.title('Poblacion por Sexo y Nacionalidad')
+st.title('Población por Sexo y Nacionalidad')
 
 # URL del backend
 backend_url = "http://localhost:5000/get_poblacion_data"
@@ -31,14 +31,12 @@ def load_data():
 
     if redis_available:
         st.success("Conectado a Redis")
-        data = redis_client.get('data')
+        data = redis_client.get('poblacion_data')  # Clave única
         if data:
             st.info("Mostrando datos de Redis")
             return pd.read_json(StringIO(data), orient='split')
         else:
             st.info("Intentando cargar datos desde el backend")
-    else:
-        st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
 
     try:
         response = requests.get(backend_url)
@@ -47,7 +45,7 @@ def load_data():
         df = pd.DataFrame(data)
         # Almacena datos en Redis si está disponible
         if redis_available:
-            redis_client.set('data', df.to_json(orient='split'))
+            redis_client.set('poblacion_data', df.to_json(orient='split'))  # Clave única
         st.info("Mostrando datos del backend")
         return df
     except requests.RequestException:
@@ -55,16 +53,16 @@ def load_data():
         return None
 
 # Obtiene los datos del backend o desde Redis
-df = load_data()
+df_poblacion = load_data()
 
 # Filtrado de datos por periodo
-if df is not None:
-    if 'Periodo' in df.columns:
-        df['Periodo'] = df['Periodo'].astype(str).str.replace(',', '')  # Remover comas
-        periodos = df['Periodo'].unique()
+if df_poblacion is not None:
+    if 'Periodo' in df_poblacion.columns:
+        df_poblacion['Periodo'] = df_poblacion['Periodo'].astype(str).str.replace(',', '')  # Remover comas
+        periodos = df_poblacion['Periodo'].unique()
         selected_period = st.selectbox('Seleccione el periodo para visualizar', periodos)
 
-        filtered_df = df[df['Periodo'] == selected_period]
+        filtered_df = df_poblacion[df_poblacion['Periodo'] == selected_period]
 
         # Mostrar las columnas del DataFrame filtrado
         st.write("Columnas en filtered_df:", filtered_df.columns)
@@ -77,20 +75,18 @@ if df is not None:
             if selected_nacionalidades:
                 comparison_df = filtered_df[filtered_df['Nacionalidad'].isin(selected_nacionalidades)]
             else:
-                comparison_df = pd.DataFrame(columns=df.columns)
+                comparison_df = pd.DataFrame(columns=df_poblacion.columns)
 
-            # Generar gráfico de pastel si hay datos seleccionados
+            # Generar gráficos si hay datos seleccionados
             if not comparison_df.empty:
                 st.subheader('Total de población por nacionalidad')
 
                 fig = px.pie(comparison_df, values='Total', names='Nacionalidad', title='Distribución de la población total por nacionalidad')
                 st.plotly_chart(fig)
 
-                st.subheader('Total de población por nacionalidad')
                 fig2 = px.bar(comparison_df, x='Nacionalidad', y='Total', title='Total de población por nacionalidad')
                 st.plotly_chart(fig2)
 
-                st.subheader('Evolución de la Población en el Tiempo')
                 fig3 = px.pie(comparison_df, values='Total', names='Nacionalidad', title=f'Evolución de la población en el período {selected_period}')
                 st.plotly_chart(fig3)
 
