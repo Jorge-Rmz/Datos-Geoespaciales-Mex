@@ -55,6 +55,10 @@ def load_data():
 # Obtiene los datos del backend o desde Redis
 df_poblacion = load_data()
 
+# Ocultar columnas no deseadas
+if df_poblacion is not None:
+    df_poblacion = df_poblacion.drop(columns=['Provincias', 'Secciones'], errors='ignore')
+
 # Mostrar la tabla completa
 if df_poblacion is not None:
     st.write("Datos Completos:")
@@ -68,9 +72,6 @@ if df_poblacion is not None:
         selected_period = st.selectbox('Seleccione el periodo para visualizar', periodos)
 
         filtered_df = df_poblacion[df_poblacion['Periodo'] == selected_period]
-
-        # Elimina o comenta la siguiente línea para no mostrar las columnas del DataFrame filtrado
-        # st.write("Columnas en filtered_df:", filtered_df.columns)
 
         if 'Nacionalidad' in filtered_df.columns:
             selected_nacionalidades = st.multiselect('Seleccione las nacionalidades para comparar', filtered_df['Nacionalidad'].unique())
@@ -129,8 +130,13 @@ with st.form(key='add_record_form'):
 
         if response.status_code == 200:
             st.success("Registro agregado correctamente")
-            # Actualiza los datos en Redis
-            redis_client.set('poblacion_data', df_poblacion.to_json(orient='split'))
+            # Recargar los datos desde el backend después de agregar el registro
+            df_poblacion = load_data()
+            if df_poblacion is not None:
+                redis_client.set('poblacion_data', df_poblacion.to_json(orient='split'))
+                df_poblacion = df_poblacion.drop(columns=['Provincias', 'Secciones'], errors='ignore')
+                st.write("Datos Actualizados:")
+                st.dataframe(df_poblacion)
         else:
             st.error(f"Error al agregar registro: {response.json().get('error')}")
 
@@ -138,41 +144,3 @@ with st.form(key='add_record_form'):
 if df_poblacion is not None:
     st.write("Datos Actualizados:")
     st.dataframe(df_poblacion)
-
-
-# Opción para editar un registro existente
-st.subheader("Editar Registro Existente")
-
-# Seleccionar el registro a editar
-nacionalidad_edit = st.selectbox('Selecciona la Nacionalidad a Editar:', df_poblacion['Nacionalidad'].unique())
-periodo_edit = st.selectbox('Selecciona el Periodo a Editar:', df_poblacion['Periodo'].unique())
-
-# Filtrar el DataFrame para obtener el registro específico
-registro_edit = df_poblacion[
-    (df_poblacion['Nacionalidad'] == nacionalidad_edit) & (df_poblacion['Periodo'] == periodo_edit)]
-
-if not registro_edit.empty:
-    row = registro_edit.iloc[0]
-
-    sexo_edit = st.selectbox('Sexo', options=['Masculino', 'Femenino'], index=0 if row['Sexo'] == 'Masculino' else 1)
-    total_edit = st.number_input('Total', min_value=0, value=int(row['Total']))
-
-    if st.button('Actualizar Registro'):
-        updated_data = {
-            "Sexo": sexo_edit,
-            "Nacionalidad": nacionalidad_edit,
-            "Periodo": periodo_edit,
-            "Total": total_edit
-        }
-
-        # Llamada a la API para editar el registro
-        response = requests.post("http://Backend:5000/post_poblacion", json=updated_data)
-
-        if response.status_code == 200:
-            st.success("Registro actualizado correctamente")
-            # Actualiza los datos en Redis
-            redis_client.set('poblacion_data', df_poblacion.to_json(orient='split'))
-        else:
-            st.error(f"Error al actualizar registro: {response.json().get('error')}")
-else:
-    st.warning("No se encontró el registro seleccionado.")

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import pandas as pd
 
 app = Flask(__name__)
@@ -34,7 +34,6 @@ def add_new_record(data):
             'Periodo': periodo,
             'Total': total
         }])
-
         df = pd.concat([df, new_row], ignore_index=True)
         save_data(df)
         return {"message": "Registro añadido correctamente"}
