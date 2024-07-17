@@ -88,5 +88,16 @@ def get_pib_data():
     except Exception as e:
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
 
+@app.route('/post_pib_data', methods=['POST'])
+def post_pib_data():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No se proporcionaron datos"}), 400
+        result = PIB.add_new_pib(data)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": f"Ocurrió un error: {e}"}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

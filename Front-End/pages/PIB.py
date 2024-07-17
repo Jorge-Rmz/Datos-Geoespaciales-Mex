@@ -1,81 +1,127 @@
+import pickle
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import requests
 import redis
-from io import StringIO
 
 redis_host = "redis"
 redis_port = 6379
+redis_password = ""
 
-# Conectar a Redis
-redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+data_key = "data_pib"
+url = "http://Backend:5000/get_pib_data"
+post_url = "http://Backend:5000/post_pib_data"
 
-# Título de la aplicación
-st.title('PIB')
+r = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, decode_responses=False)
 
-# URL del backend
-backend_url = "http://Backend:5000/get_pib_data"
-
-
-# Función para verificar si Redis está disponible
-def is_redis_available():
+def new_register(pais, year, pib):
+    new_data = {
+        "Nombre del País": pais,
+        "Año": year,
+        "PIB": pib
+    }
     try:
-        redis_client.ping()
-        return True
-    except redis.ConnectionError:
-        return False
-
-
-# Función para cargar los datos desde el backend o Redis
-def load_data():
-    redis_available = is_redis_available()
-
-    if redis_available:
-        st.success("Conectado a Redis")
-        data = redis_client.get('data')
-        if data:
-            st.info("Mostrando datos de Redis")
-            return pd.read_json(StringIO(data), orient='split')
+        response = requests.post(post_url, json=new_data)
+        if response.status_code == 200:
+            st.success(f'Registro guardado correctamente: {new_data}')
+            df = load_data_from_api()
+            if df is not None:
+                set_data_to_redis(data_key, df)
+                st.experimental_rerun()
         else:
-            st.info("Intentando cargar datos desde el backend")
-    else:
-        st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
+            st.error('No se pudo guardar el registro en el backend.')
+    except Exception as e:
+        st.error(f'Error al enviar el registro al backend: {e}')
 
+def load_data_from_api():
     try:
-        response = requests.get(backend_url)
-        response.raise_for_status()
-        data = response.json()
-        df = pd.DataFrame(data)
-        # Almacena datos en Redis si está disponible
-        if redis_available:
-            redis_client.set('data', df.to_json(orient='split'))
-        st.info("Mostrando datos del backend")
-        return df
-    except requests.RequestException:
-        st.error("No se pudo obtener datos del backend ni de Redis")
+        data = get_data_from_api()
+        if data is not None:
+            df = pd.DataFrame(data)
+            return df
+    except Exception as e:
+        st.error(f'Error al cargar los datos de la API: {e}')
         return None
 
+def get_data_from_api():
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error('No se pudo obtener los datos de la API.')
+            return None
+    except Exception as e:
+        st.error(f'Error al realizar la solicitud a la API: {e}')
+        return None
 
-# Obtiene los datos del backend o desde Redis
-df = load_data()
+def get_data_from_redis(key):
+    try:
+        cached_data = r.get(key)
+        if cached_data:
+            return pickle.loads(cached_data)
+        else:
+            st.warning("Sin información en redis")
+            return None
+    except Exception as e:
+        st.error(f'Error al obtener datos de Redis: {e}')
+        return None
+
+def set_data_to_redis(key, data):
+    try:
+        r.set(key, pickle.dumps(data))
+    except Exception as e:
+        st.error(f'Error al guardar datos en Redis: {e}')
+
+df = get_data_from_redis(data_key)
+if df is None:
+    df = load_data_from_api()
+    if df is not None:
+        set_data_to_redis(data_key, df)
+        st.success("Datos cargados correctamente desde la API.")
+    else:
+        st.write('No se pudo obtener los datos de la API.')
+        st.stop()
+else:
+    st.success("Usando información en redis")
+
+columns_order = ['Código del País', 'Nombre del País'] + [col for col in df.columns if col not in ['Código del País', 'Nombre del País']]
+df = df[columns_order]
+
+st.title('PIB')
+
+years = [str(year) for year in range(1960, 2024)]
+renamed_years = [f'Año {year}' for year in years]
+
+df = df.dropna(subset=renamed_years, how='all')
+df = df.reset_index(drop=True)
 
 if df is not None:
     # Filtrado de datos por país
-    countries = df['Country Name'].unique()
+    countries = df['Nombre del País'].unique()
     selected_countries = st.multiselect('Seleccione los países para visualizar', countries)
 
     if selected_countries:
-        filtered_df = df[df['Country Name'].isin(selected_countries)]
+        filtered_df = df[df['Nombre del País'].isin(selected_countries)]
         st.write(filtered_df)
     else:
         filtered_df = df
         st.write(filtered_df)
 
-    # Lista de años
-    range = list(range(1961, 2024))
-
     # Selección del año
-    selected = st.selectbox("Año", range, index=0)
+    selected_year = st.selectbox('Selecciona un año:', renamed_years, index=0)
 
     # Gráfica de PIB en el mundo por Año
-    st.bar_chart(df, x="Country Name", y=str(selected), horizontal=True)
+    st.bar_chart(df, x='Nombre del País', y=str(selected_year), horizontal=True)
+
+st.subheader('Nuevo Registro')
+with st.form(key='new_register_form'):
+    selected_country = st.selectbox('Selecciona un país:', df['Nombre del País'].unique())
+    selected_year = st.selectbox('Selecciona un año:', renamed_years)
+    pib = st.number_input('Ingresa el PIB:', format="%.5f")
+    submit_button = st.form_submit_button(label='Guardar Registro')
+
+if submit_button:
+    new_register(selected_country, selected_year, pib)
+

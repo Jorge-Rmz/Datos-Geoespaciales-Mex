@@ -6,17 +6,48 @@ app = Flask(__name__)
 # Ruta del archivo CSV
 file_path = "datos/pib.csv"
 
-def load_data():
-    try:
-        # Carga el archivo CSV con datos
-        df = pd.read_csv(file_path)
-        return df
 
-    except FileNotFoundError:
-        raise FileNotFoundError(f"El archivo {file_path} no se encontró.")
-    except pd.errors.ParserError:
-        raise ValueError(f"Error al parsear el archivo {file_path}.")
-    except Exception as e:
-        raise Exception(f"Ocurrió un error: {e}")
+def load_data():
+    df = pd.read_csv(file_path)
+    years = [str(year) for year in range(1960, 2024)]
+    columns = ['Country Name', 'Country Code'] + years
+    df = df[columns]
+    column_rename = {
+        'Country Name': 'Nombre del País',
+        'Country Code': 'Código del País'
+    }
+    column_rename.update({year: f'Año {year}' for year in years})
+    df = df.rename(columns=column_rename)
+    return df
+
+def save_data(df):
+    # Renombrar las columnas a su forma original antes de guardar
+    column_rename = {
+        'Nombre del País': 'Country Name',
+        'Código del País': 'Country Code'
+    }
+    column_rename.update({f'Año {year}': str(year) for year in range(1960, 2024)})
+    df = df.rename(columns=column_rename)
+    df.to_csv(file_path, index=False)
+
+def add_new_pib(data):
+    df = load_data()
+    country = data['Nombre del País']
+    year = data['Año']
+    pib = data['PIB']
+
+    if country not in df['Nombre del País'].values:
+        # Añadir nuevo país si no existe
+        new_row = {col: None for col in df.columns}
+        new_row['Nombre del País'] = country
+        new_row['Código del País'] = 'N/A'  # Puedes ajustar esto según sea necesario
+        new_row[year] = pib
+        df = df.append(new_row, ignore_index=True)
+    else:
+        # Actualizar el registro existente
+        df.loc[df['Nombre del País'] == country, year] = pib
+
+    save_data(df)
+    return {"message": "Registro añadido correctamente"}
 
 
