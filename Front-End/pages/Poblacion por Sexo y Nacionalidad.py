@@ -1,77 +1,109 @@
+import pickle
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
 import redis
-from io import StringIO
 
 redis_host = "redis"
 redis_port = 6379
+redis_password = ""
 
-# Conectar a Redis
-redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+data_key = "data_poblacion"
+url = "http://Backend:5000/get_poblacion_data"
+post_url = "http://Backend:5000/post_poblacion_data"
 
-# Título de la aplicación
-st.title('Población por Sexo y Nacionalidad')
+r = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, decode_responses=False)
 
-# URL del backend
-backend_url = "http://Backend:5000/get_poblacion_data"
-
-# Función para verificar si Redis está disponible
-def is_redis_available():
+def new_register(nacionalidad, periodo, sexo, total):
+    new_data = {
+        "Nacionalidad": nacionalidad,
+        "Periodo": int(periodo),
+        "Sexo": sexo,
+        "Total": int(total)
+    }
     try:
-        redis_client.ping()
-        return True
-    except redis.ConnectionError:
-        return False
-
-# Función para cargar los datos desde el backend o Redis
-def load_data():
-    redis_available = is_redis_available()
-
-    if redis_available:
-        st.success("Conectado a Redis")
-        data = redis_client.get('poblacion_data')
-        if data:
-            st.info("Mostrando datos de Redis")
-            return pd.read_json(StringIO(data), orient='split')
+        response = requests.post(post_url, json=new_data)
+        if response.status_code == 200:
+            st.success(f'Registro guardado correctamente: {new_data}')
+            df = load_data_from_api()
+            if df is not None:
+                set_data_to_redis(data_key, df)
+                st.experimental_rerun()
         else:
-            st.info("Intentando cargar datos desde el backend")
+            st.error('No se pudo guardar el registro en el backend.')
+    except Exception as e:
+        st.error(f'Error al enviar el registro al backend: {e}')
 
+def load_data_from_api():
     try:
-        response = requests.get(backend_url)
-        response.raise_for_status()
-        data = response.json()
-        df = pd.DataFrame(data)
-        # Almacena datos en Redis si está disponible
-        if redis_available:
-            redis_client.set('poblacion_data', df.to_json(orient='split'))
-        st.info("Mostrando datos del backend")
-        return df
-    except requests.RequestException:
-        st.error("No se pudo obtener datos del backend ni de Redis")
+        data = get_data_from_api()
+        if data is not None:
+            df = pd.DataFrame(data)
+            return df
+    except Exception as e:
+        st.error(f'Error al cargar los datos de la API: {e}')
         return None
 
-# Obtiene los datos del backend o desde Redis
-df_poblacion = load_data()
+def get_data_from_api():
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            st.error('No se pudo obtener los datos de la API.')
+            return None
+    except Exception as e:
+        st.error(f'Error al realizar la solicitud a la API: {e}')
+        return None
+
+def get_data_from_redis(key):
+    try:
+        cached_data = r.get(key)
+        if cached_data:
+            return pickle.loads(cached_data)
+        else:
+            st.warning("Sin información en redis")
+            return None
+    except Exception as e:
+        st.error(f'Error al obtener datos de Redis: {e}')
+        return None
+
+def set_data_to_redis(key, data):
+    try:
+        r.set(key, pickle.dumps(data))
+    except Exception as e:
+        st.error(f'Error al guardar datos en Redis: {e}')
+
+df = get_data_from_redis(data_key)
+if df is None:
+    df = load_data_from_api()
+    if df is not None:
+        set_data_to_redis(data_key, df)
+        st.success("Datos cargados correctamente desde la API.")
+    else:
+        st.write('No se pudo obtener los datos de la API.')
+        st.stop()
+else:
+    st.success("Usando información en redis")
 
 # Ocultar columnas no deseadas
-if df_poblacion is not None:
-    df_poblacion = df_poblacion.drop(columns=['Provincias', 'Secciones'], errors='ignore')
+if df is not None:
+    df = df.drop(columns=['Provincias', 'Secciones', 'Municipios'], errors='ignore')
 
 # Mostrar la tabla completa
-if df_poblacion is not None:
+if df is not None:
     st.write("Datos Completos:")
-    st.dataframe(df_poblacion)  # Muestra todos los datos
+    st.dataframe(df)  # Muestra todos los datos
 
 # Filtrado de datos por periodo
-if df_poblacion is not None:
-    if 'Periodo' in df_poblacion.columns:
-        df_poblacion['Periodo'] = df_poblacion['Periodo'].astype(str).str.replace(',', '')
-        periodos = df_poblacion['Periodo'].unique()
+if df is not None:
+    if 'Periodo' in df.columns:
+        df['Periodo'] = df['Periodo'].astype(str).str.replace(',', '')
+        periodos = df['Periodo'].unique()
         selected_period = st.selectbox('Seleccione el periodo para visualizar', periodos)
 
-        filtered_df = df_poblacion[df_poblacion['Periodo'] == selected_period]
+        filtered_df = df[df['Periodo'] == selected_period]
 
         if 'Nacionalidad' in filtered_df.columns:
             selected_nacionalidades = st.multiselect('Seleccione las nacionalidades para comparar', filtered_df['Nacionalidad'].unique())
@@ -79,7 +111,7 @@ if df_poblacion is not None:
             if selected_nacionalidades:
                 comparison_df = filtered_df[filtered_df['Nacionalidad'].isin(selected_nacionalidades)]
             else:
-                comparison_df = pd.DataFrame(columns=df_poblacion.columns)
+                comparison_df = pd.DataFrame(columns=df.columns)
 
             if not comparison_df.empty:
                 st.write('Tabla Comparativa de Nacionalidades Seleccionadas')
@@ -106,41 +138,29 @@ if df_poblacion is not None:
 else:
     st.error("Error al obtener los datos.")
 
-# Formulario para agregar nuevo registro
-st.subheader("Agregar Nuevo Registro")
+columns_order = ['Nacionalidad', 'Periodo', 'Sexo', 'Total'] + [col for col in df.columns if col not in ['Nacionalidad', 'Periodo', 'Sexo', 'Total']]
+df = df[columns_order]
 
-with st.form(key='add_record_form'):
-    sexo = st.selectbox('Sexo', options=['Masculino', 'Femenino'])
-    nacionalidad = st.text_input('Nacionalidad')
-    periodo = st.text_input('Periodo')
-    total = st.number_input('Total', min_value=0)
+st.write(df)
 
-    submit_button = st.form_submit_button(label='Agregar Registro')
+st.subheader('Nuevo Registro')
+with st.form(key='new_register_form'):
+    input_nacionalidad = st.text_input('Nacionalidad')
+    input_periodo = st.number_input('Periodo', min_value=2000)
+    input_sexo = st.text_input('Sexo')
+    input_total = st.number_input('Total', min_value=1)
+    submit_button_register = st.form_submit_button(label='Guardar Registro')
 
-    if submit_button:
-        new_data = {
-            "Sexo": sexo,
-            "Nacionalidad": nacionalidad,
-            "Periodo": periodo,
-            "Total": total
-        }
+if submit_button_register:
+    new_register(input_nacionalidad, input_periodo, input_sexo, input_total)
 
-        # Llamada a la API para agregar el nuevo registro
-        response = requests.post("http://Backend:5000/post_poblacion", json=new_data)
+st.subheader('Editar Registro')
+with st.form(key='new_edit_form'):
+    select_nacionalidad = st.selectbox('Selecciona una nacionalidad: ', df['Nacionalidad'].unique(), index=0)
+    select_periodo = st.selectbox('Selecciona un periodo: ', df['Periodo'].unique(), index=0)
+    select_sexo = st.selectbox('Selecciona un sexo: ', df['Sexo'].unique(), index=0)
+    input_total = st.number_input('Ingresa el total:', min_value=0)
+    submit_button_edit = st.form_submit_button(label='Editar Registro')
 
-        if response.status_code == 200:
-            st.success("Registro agregado correctamente")
-            # Recargar los datos desde el backend después de agregar el registro
-            df_poblacion = load_data()
-            if df_poblacion is not None:
-                redis_client.set('poblacion_data', df_poblacion.to_json(orient='split'))
-                df_poblacion = df_poblacion.drop(columns=['Provincias', 'Secciones'], errors='ignore')
-                st.write("Datos Actualizados:")
-                st.dataframe(df_poblacion)
-        else:
-            st.error(f"Error al agregar registro: {response.json().get('error')}")
-
-# Mostrar la tabla actualizada
-if df_poblacion is not None:
-    st.write("Datos Actualizados:")
-    st.dataframe(df_poblacion)
+if submit_button_edit:
+    new_register(select_nacionalidad, select_periodo, select_sexo, input_total)
