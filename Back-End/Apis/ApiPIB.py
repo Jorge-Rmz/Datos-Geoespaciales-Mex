@@ -37,12 +37,12 @@ def add_new_pib(data):
     pib = data['PIB']
 
     if country not in df['Nombre del País'].values:
-        # Añadir nuevo país si no existe
-        new_row = {col: None for col in df.columns}
-        new_row['Nombre del País'] = country
-        new_row['Código del País'] = 'N/A'  # Puedes ajustar esto según sea necesario
-        new_row[year] = pib
-        df = df.append(new_row, ignore_index=True)
+
+        new_row = pd.DataFrame({
+            'Nombre del País': [country],
+            year: [pib]
+        })
+        df = pd.concat([df, new_row], ignore_index=True)
     else:
         # Actualizar el registro existente
         df.loc[df['Nombre del País'] == country, year] = pib

@@ -117,11 +117,21 @@ if df is not None:
 
 st.subheader('Nuevo Registro')
 with st.form(key='new_register_form'):
+    input_country = st.text_input('Nombre del País')
+    selected_year = st.selectbox('Selecciona un año:', renamed_years)
+    pib = st.number_input('Ingresa el PIB:', format="%.5f")
+    submit_button_register = st.form_submit_button(label='Guardar Registro')
+
+if submit_button_register:
+    new_register(input_country, selected_year, pib)
+
+st.subheader('Editar Registro')
+with st.form(key='new_edit_form'):
     selected_country = st.selectbox('Selecciona un país:', df['Nombre del País'].unique())
     selected_year = st.selectbox('Selecciona un año:', renamed_years)
     pib = st.number_input('Ingresa el PIB:', format="%.5f")
-    submit_button = st.form_submit_button(label='Guardar Registro')
+    submit_button_edit = st.form_submit_button(label='Edit Registro')
 
-if submit_button:
+if submit_button_edit:
     new_register(selected_country, selected_year, pib)
 
