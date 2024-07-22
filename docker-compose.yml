@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   frontend:
     build:
@@ -8,6 +10,7 @@ services:
     depends_on:
       - backend
       - redis
+      - postgres
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -20,11 +23,31 @@ services:
       - "5000:5000"
     depends_on:
       - redis
+      - postgres
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: data_mex
+      POSTGRES_USER: user_mex
+      POSTGRES_PASSWORD: mex_231**#
 
   redis:
     image: "redis:latest"
     ports:
       - "6379:6379"
+
+  postgres:
+    image: "postgres:latest"
+    environment:
+      POSTGRES_DB: data_mex
+      POSTGRES_USER: user_mex
+      POSTGRES_PASSWORD: mex_231**#
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

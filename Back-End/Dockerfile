@@ -18,3 +18,4 @@ EXPOSE 5000
 
 # Comando para ejecutar la aplicación Back-End
 CMD ["python", "Main.py"]
+

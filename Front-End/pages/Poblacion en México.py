@@ -3,6 +3,9 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 import plotly.express as px
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+from streamlit.components.v1 import html
+from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, GridUpdateMode, JsCode
 import requests
 import time
 import redis
@@ -20,6 +23,20 @@ redis_port = 6379
 
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
 
+def edit_record(record_id):
+    st.write(f"Preparando para editar el registro {record_id}...")
+    # Aquí podrías abrir un formulario o redirigir a una página de edición
+    # Ejemplo:
+    # st.text_input("Nombre", value="Valor actual")
+    # ...
+
+def delete_record(record_id):
+    st.write(f"Preparando para eliminar el registro {record_id}...")
+    # Aquí podrías confirmar la eliminación o realizar la acción directamente
+    # Ejemplo:
+    # if st.button("Confirmar eliminación"):
+    #     requests.post(f"{DELETE_ENDPOINT}{record_id}")
+    # ...
 
 def download_csv_from_redis():
     if is_redis_available():
@@ -124,7 +141,7 @@ def load_data_from_redis():
 def load_data():
     try:
         # Verificar si los datos están en la API
-        response = requests.get(f"{api_url}/api/get_poblacion_mex")
+        response = requests.get(f"{api_url}/api/get_data/db/postgres")
 
         if response.status_code == 200:
             df = pd.DataFrame(response.json())
@@ -146,6 +163,92 @@ def load_data():
         st.error(f"Se produjo un error inesperado: {e}")
         return None
 
+# Función para manejar la edición de un registro
+def edit_record(record_id):
+    url = f"http://tu-api-endpoint/edit/{record_id}"
+    response = requests.post(url, json={})
+    if response.status_code == 200:
+        st.success(f"Registro {record_id} editado exitosamente")
+    else:
+        st.error(f"Error al editar el registro {record_id}")
+
+# Función para manejar la eliminación de un registro
+def delete_record(record_id):
+    url = f"http://tu-api-endpoint/delete/{record_id}"
+    response = requests.delete(url)
+    if response.status_code == 200:
+        st.success(f"Registro {record_id} eliminado exitosamente")
+    else:
+        st.error(f"Error al eliminar el registro {record_id}")
+
+# Función para generar la tabla HTML con botones de acción
+def generate_table_html(df):
+    table_html = """
+    <table style="width:100%; border: 1px solid black; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th style="border: 1px solid black; padding: 8px;">ID</th>
+                <th style="border: 1px solid black; padding: 8px;">Estado</th>
+                <th style="border: 1px solid black; padding: 8px;">Latitud</th>
+                <th style="border: 1px solid black; padding: 8px;">Longitud</th>
+                <th style="border: 1px solid black; padding: 8px;">Población</th>
+                <th style="border: 1px solid black; padding: 8px;">Región</th>
+                <th style="border: 1px solid black; padding: 8px;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+    """
+    for index, row in df.iterrows():
+        table_html += f"""
+            <tr>
+                <td style="border: 1px solid black; padding: 8px;">{row['id']}</td>
+                <td style="border: 1px solid black; padding: 8px;">{row['estado']}</td>
+                <td style="border: 1px solid black; padding: 8px;">{row['lat']}</td>
+                <td style="border: 1px solid black; padding: 8px;">{row['lon']}</td>
+                <td style="border: 1px solid black; padding: 8px;">{row['poblacion']}</td>
+                <td style="border: 1px solid black; padding: 8px;">{row['region']}</td>
+                <td style="border: 1px solid black; padding: 8px;">
+                    <button onclick="editRecord({row['id']})">Editar</button>
+                    <button onclick="deleteRecord({row['id']})">Eliminar</button>
+                </td>
+            </tr>
+        """
+    table_html += """
+        </tbody>
+    </table>
+    """
+    return table_html
+
+# Mostrar la tabla con botones de acción
+def display_table(df):
+    table_html = generate_table_html(df)
+    st.markdown(table_html, unsafe_allow_html=True)
+
+    st.markdown("""
+    <script>
+    function editRecord(recordId) {
+        fetch(`/edit?id=${recordId}`).then(response => {
+            if (response.ok) {
+                alert(`Registro ${recordId} editado exitosamente`);
+            } else {
+                alert(`Error al editar el registro ${recordId}`);
+            }
+        });
+    }
+
+    function deleteRecord(recordId) {
+        fetch(`/delete?id=${recordId}`).then(response => {
+            if (response.ok) {
+                alert(`Registro ${recordId} eliminado exitosamente`);
+            } else {
+                alert(`Error al eliminar el registro ${recordId}`);
+            }
+        });
+    }
+    </script>
+    """, unsafe_allow_html=True)
+
+
 
 
 df = load_data()
@@ -153,9 +256,15 @@ df = load_data()
 if df is not None:
     def actualizar_visualizacion(df):
 
-        # Mostrar los datos
-        st.write("Datos completos:")
-        st.write(df)
+        st.title("Mostrar datos")
+        # Reordenar columnas del DataFrame
+        df = df[['id', 'estado', 'lat', 'lon', 'poblacion', 'region']]
+
+
+        # Generar y mostrar la tabla con botones
+        st.table(df)
+
+
 
         # Filtrado de datos por región
         regiones = df['region'].unique()

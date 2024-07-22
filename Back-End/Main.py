@@ -1,4 +1,6 @@
 from flask import Flask, jsonify, request
+from sqlalchemy.exc import SQLAlchemyError
+
 import Apis.BackendTrabajoDomestico as TrabajoDomestico
 import Apis.ApiConsumoElectrico as ConsumoElectrico
 import Apis.Api_Poblacion_Mex as pm
@@ -12,6 +14,47 @@ app = Flask(__name__)
 def index():
     return 'API Funcionando'
 
+@app.route('/api/check_db_connection', methods=['GET'])
+def db_connection_status():
+    return jsonify(pm.check_db_connection())
+
+
+@app.route('/api/get_data/db/postgres', methods=['GET'])
+def get_data_from_db():
+    return pm.get_data_from_db()
+
+
+@app.route('/api/create_record', methods=['POST'])
+def create_record_endpoint():
+    if request.is_json:
+        data = request.get_json()
+        print(data)
+        estado = data.get('estado')
+        lat = data.get('lat')
+        lon = data.get('lon')
+        poblacion = data.get('poblacion')
+        region = data.get('region')
+        result = pm.create_record(estado, lat, lon, poblacion, region)
+        return jsonify(result)
+    else:
+        return jsonify({"error": "La solicitud debe ser en formato JSON"}), 415
+
+@app.route('/api/update_record/<int:id>', methods=['PUT'])
+def update_data(id):
+    try:
+        data = request.get_json()
+        pm.update_record(id, **data)
+        return jsonify({'message': 'Registro actualizado exitosamente.'})
+    except SQLAlchemyError as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/delete_record/<int:id>', methods=['DELETE'])
+def delete_data(id):
+    try:
+        pm.delete_record(id)
+        return jsonify({'message': 'Registro eliminado exitosamente.'})
+    except SQLAlchemyError as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/get_poblacion_mex', methods=['GET'])
 def get_poblacion():
