@@ -112,8 +112,10 @@ if df is not None:
     # Selección del año
     selected_year = st.selectbox('Selecciona un año:', renamed_years, index=0)
 
-    # Gráfica de PIB en el mundo por Año
-    st.bar_chart(df, x='Nombre del País', y=str(selected_year), horizontal=True)
+    # Graficar el PIB de todos los países para el año seleccionado usando Plotly
+    fig = px.bar(df, x='Nombre del País', y=selected_year, title=f'PIB de los países en {selected_year}',
+                 labels={selected_year: 'PIB'})
+    st.plotly_chart(fig)
 
 st.subheader('Nuevo Registro')
 with st.form(key='new_register_form'):
