@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 import pandas as pd
 import redis
 import json
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, text
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float, text, update
 from sqlalchemy.exc import OperationalError, SQLAlchemyError, IntegrityError
 import psycopg2
 from psycopg2 import OperationalError
@@ -69,34 +69,47 @@ def create_record(estado, lat, lon, poblacion, region):
         session.close()
 
 
-
 def update_record(id, **kwargs):
     session = Session()
     try:
         # Verificar si el registro existe
         existing_record = session.query(estados_mexico).filter_by(id=id).first()
         if not existing_record:
+            print(f"Registro con ID {id} no encontrado.")
             return {"error": "El registro con el ID proporcionado no existe."}, 404
 
-        # Actualizar el registro
-        stmt = estados_mexico.update().where(estados_mexico.c.id == id).values(**kwargs)
+        # Actualizar el registro con los datos restantes en kwargs
+        print(f"Actualizando el registro con ID {id} con datos {kwargs}")
+        stmt = (
+            update(estados_mexico)
+            .where(estados_mexico.c.id == id)
+            .values(**kwargs)
+        )
         session.execute(stmt)
         session.commit()
+        print(f"Registro con ID {id} actualizado exitosamente.")
         return {"message": "Registro actualizado exitosamente."}, 200
     except IntegrityError as e:
         session.rollback()
         if "duplicate key value violates unique constraint" in str(e.orig):
+            print(f"Error de integridad: {e}")
             return {"error": "El estado ya existe."}, 409
+        print(f"Error de integridad: {e}")
         return {"error": f"Error de integridad: {e}"}, 400
     except SQLAlchemyError as e:
         session.rollback()
+        print(f"Error al actualizar el registro: {e}")
         return {"error": f"Error al actualizar el registro: {e}"}, 400
+    except Exception as e:
+        session.rollback()
+        print(f"Error inesperado: {e}")
+        return {"error": f"Error inesperado: {e}"}, 500
     finally:
         session.close()
 
 
-
 def delete_record(id):
+    print("funcion delete record")
     session = Session()
     try:
         stmt = estados_mexico.delete().where(estados_mexico.c.id == id)
@@ -110,7 +123,6 @@ def delete_record(id):
         session.close()
 
 
-
 def get_data_from_db():
     metadata = MetaData()
     data = []
@@ -118,8 +130,8 @@ def get_data_from_db():
     try:
         # Conectar y obtener datos
         with engine.connect() as connection:
-            # Consulta SQL en bruto
-            result = connection.execute(text("SELECT * FROM estados_mexico"))
+            # Consulta SQL en orden ascendente por la columna 'id'
+            result = connection.execute(text("SELECT * FROM estados_mexico ORDER BY id ASC"))
 
             # Convertir los resultados a una lista de diccionarios
             for row in result:

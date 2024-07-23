@@ -22,6 +22,8 @@ def new_register(nacionalidad, periodo, sexo, total):
         "Sexo": sexo,
         "Total": int(total)
     }
+
+
     try:
         response = requests.post(post_url, json=new_data)
         if response.status_code == 200:

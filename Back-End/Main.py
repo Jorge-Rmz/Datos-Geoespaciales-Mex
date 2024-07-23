@@ -6,9 +6,14 @@ import Apis.ApiConsumoElectrico as ConsumoElectrico
 import Apis.Api_Poblacion_Mex as pm
 import Apis.ApiPoblacionPorSexo as Poblacion
 import Apis.ApiPIB as PIB
+from flask_cors import CORS
 import pandas as pd
 
 app = Flask(__name__)
+
+# Configura CORS para permitir solicitudes desde cualquier origen
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 
 @app.route('/')
 def index():
@@ -43,6 +48,7 @@ def create_record_endpoint():
 def update_data(id):
     try:
         data = request.get_json()
+        print("datos editar", data)
         pm.update_record(id, **data)
         return jsonify({'message': 'Registro actualizado exitosamente.'})
     except SQLAlchemyError as e:

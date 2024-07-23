@@ -3,8 +3,6 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 import plotly.express as px
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
-from streamlit.components.v1 import html
 from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, GridUpdateMode, JsCode
 import requests
 import time
@@ -22,21 +20,6 @@ redis_host = "redis"
 redis_port = 6379
 
 redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-
-def edit_record(record_id):
-    st.write(f"Preparando para editar el registro {record_id}...")
-    # Aquí podrías abrir un formulario o redirigir a una página de edición
-    # Ejemplo:
-    # st.text_input("Nombre", value="Valor actual")
-    # ...
-
-def delete_record(record_id):
-    st.write(f"Preparando para eliminar el registro {record_id}...")
-    # Aquí podrías confirmar la eliminación o realizar la acción directamente
-    # Ejemplo:
-    # if st.button("Confirmar eliminación"):
-    #     requests.post(f"{DELETE_ENDPOINT}{record_id}")
-    # ...
 
 def download_csv_from_redis():
     if is_redis_available():
@@ -62,7 +45,7 @@ def is_redis_available():
         return False
 
 def save_data_to_redis(redis_conn, key, df):
-    redis_conn.set(key, json.dumps(df.to_dict(orient='records')))
+    redis_conn.set(key, json.dmups(df.to_dict(orient='records')))
 
 def get_data_from_redis(redis_conn, key):
     if redis_conn.exists(key):
@@ -82,6 +65,34 @@ def validar_coordenadas(latitud, longitud):
 
 # Título de la aplicación
 st.title('Visualizador de Datos Geoespaciales - Estados de México')
+
+
+
+def add_record_to_db(df):
+    url = 'http://Backend:5000/api/create_record'
+    headers = {'Content-Type': 'application/json'}
+
+    for index, row in df.iterrows():
+        data = {
+            'estado': row['estado'],
+            'lat': row['lat'],
+            'lon': row['lon'],
+            'poblacion': row['poblacion'],
+            'region': row['region']
+        }
+
+        try:
+            response = requests.post(url, headers=headers, data=json.dumps(data))
+            if response.status_code == 200:
+                result = response.json()
+                st.success(f"{result}")
+            else:
+                st.error(f"Error al agregar el registro {row['estado']}: {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error al conectar con el servidor para el registro {row['estado']}: {e}")
+
+
+
 
 # Botón para descargar datos desde Redis
 csv_data = download_csv_from_redis()
@@ -163,91 +174,242 @@ def load_data():
         st.error(f"Se produjo un error inesperado: {e}")
         return None
 
-# Función para manejar la edición de un registro
-def edit_record(record_id):
-    url = f"http://tu-api-endpoint/edit/{record_id}"
-    response = requests.post(url, json={})
-    if response.status_code == 200:
-        st.success(f"Registro {record_id} editado exitosamente")
-    else:
-        st.error(f"Error al editar el registro {record_id}")
-
-# Función para manejar la eliminación de un registro
-def delete_record(record_id):
-    url = f"http://tu-api-endpoint/delete/{record_id}"
-    response = requests.delete(url)
-    if response.status_code == 200:
-        st.success(f"Registro {record_id} eliminado exitosamente")
-    else:
-        st.error(f"Error al eliminar el registro {record_id}")
-
-# Función para generar la tabla HTML con botones de acción
 def generate_table_html(df):
     table_html = """
-    <table style="width:100%; border: 1px solid black; border-collapse: collapse;">
+    <style>
+        body {
+            background-color: #333;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid white;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #444;
+        }
+        tr:nth-child(even) {
+            background-color: #555;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 2px 1px;
+            cursor: pointer;
+        }
+        button.edit {
+            background-color: #008CBA;
+        }
+        button.delete {
+            background-color: #f44336;
+        }
+    </style>
+    <table>
         <thead>
             <tr>
-                <th style="border: 1px solid black; padding: 8px;">ID</th>
-                <th style="border: 1px solid black; padding: 8px;">Estado</th>
-                <th style="border: 1px solid black; padding: 8px;">Latitud</th>
-                <th style="border: 1px solid black; padding: 8px;">Longitud</th>
-                <th style="border: 1px solid black; padding: 8px;">Población</th>
-                <th style="border: 1px solid black; padding: 8px;">Región</th>
-                <th style="border: 1px solid black; padding: 8px;">Acciones</th>
+                <th>ID</th>
+                <th>Estado</th>
+                <th>Latitud</th>
+                <th>Longitud</th>
+                <th>Población</th>
+                <th>Región</th>
+                <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
     """
+
     for index, row in df.iterrows():
         table_html += f"""
-            <tr>
-                <td style="border: 1px solid black; padding: 8px;">{row['id']}</td>
-                <td style="border: 1px solid black; padding: 8px;">{row['estado']}</td>
-                <td style="border: 1px solid black; padding: 8px;">{row['lat']}</td>
-                <td style="border: 1px solid black; padding: 8px;">{row['lon']}</td>
-                <td style="border: 1px solid black; padding: 8px;">{row['poblacion']}</td>
-                <td style="border: 1px solid black; padding: 8px;">{row['region']}</td>
-                <td style="border: 1px solid black; padding: 8px;">
-                    <button onclick="editRecord({row['id']})">Editar</button>
-                    <button onclick="deleteRecord({row['id']})">Eliminar</button>
-                </td>
-            </tr>
+        <tr>
+            <td>{row['id']}</td>
+            <td>{row['estado']}</td>
+            <td>{row['lat']}</td>
+            <td>{row['lon']}</td>
+            <td>{row['poblacion']}</td>
+            <td>{row['region']}</td>
+            <td>
+                <button class="edit" onclick="openEditModal({row['id']}, '{row['estado']}', {row['lat']}, {row['lon']}, {row['poblacion']}, '{row['region']}')">Editar</button>
+                <button class="delete" onclick="deleteRecord({row['id']})">Eliminar</button>
+            </td>
+        </tr>
         """
+
     table_html += """
         </tbody>
     </table>
     """
-    return table_html
 
-# Mostrar la tabla con botones de acción
-def display_table(df):
-    table_html = generate_table_html(df)
-    st.markdown(table_html, unsafe_allow_html=True)
+    # Modal HTML
+    modal_html = """
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2>Editar Registro</h2>
+            <form id="editForm">
+                <label for="estado">Estado:</label>
+                <input type="text" id="estado" name="estado"><br><br>
+                <label for="lat">Latitud:</label>
+                <input type="number" id="lat" name="lat"><br><br>
+                <label for="lon">Longitud:</label>
+                <input type="number" id="lon" name="lon"><br><br>
+                <label for="poblacion">Población:</label>
+                <input type="number" id="poblacion" name="poblacion"><br><br>
+                <label for="region">Región:</label>
+                <input type="text" id="region" name="region"><br><br>
+                <button type="button" onclick="submitEdit()">Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
 
-    st.markdown("""
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #333;
+            margin: 2% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            color: white;
+        }
+        .close {
+            color: white;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        label {
+            display: inline-block;
+            width: 140px;
+        }
+        input {
+            width: calc(100% - 150px);
+            padding: 5px;
+            margin: 5px 0;
+            box-sizing: border-box;
+        }
+    </style>
+    """
+
+    # JavaScript
+    script_html = """
     <script>
-    function editRecord(recordId) {
-        fetch(`/edit?id=${recordId}`).then(response => {
+    function openEditModal(id, estado, lat, lon, poblacion, region) {
+        document.getElementById('editForm').dataset.id = id;
+        document.getElementById('estado').value = estado;
+        document.getElementById('lat').value = lat;
+        document.getElementById('lon').value = lon;
+        document.getElementById('poblacion').value = poblacion;
+        document.getElementById('region').value = region;
+        document.getElementById('editModal').style.display = "block";
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = "none";
+    }
+
+    async function submitEdit() {
+        let form = document.getElementById('editForm');
+        let recordId = form.dataset.id;
+        let estado = document.getElementById('estado').value;
+        let lat = document.getElementById('lat').value;
+        let lon = document.getElementById('lon').value;
+        let poblacion = document.getElementById('poblacion').value;
+        let region = document.getElementById('region').value;
+
+        console.log("Datos a enviar:", {
+            "estado": estado,
+            "lat": lat,
+            "lon": lon,
+            "poblacion": poblacion,
+            "region": region
+        });
+
+        try {
+            let response = await fetch(`http://localhost:5000/api/update_record/${recordId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    "estado": estado,
+                    "lat": lat,
+                    "lon": lon,
+                    "poblacion": poblacion,
+                    "region": region
+                })
+            });
             if (response.ok) {
                 alert(`Registro ${recordId} editado exitosamente`);
+                closeEditModal();
+                window.parent.postMessage('reloadData', '*');  // Envía un mensaje al contenedor padre para recargar los datos
             } else {
-                alert(`Error al editar el registro ${recordId}`);
+                let error = await response.text();
+                alert(`Error al editar el registro ${recordId}: ${error}`);
             }
-        });
+        } catch (error) {
+            alert(`Error al editar el registro ${recordId}: ${error.message}`);
+        }
     }
 
-    function deleteRecord(recordId) {
-        fetch(`/delete?id=${recordId}`).then(response => {
+    async function deleteRecord(recordId) {
+        console.log("delete record " + recordId);
+        try {
+            let response = await fetch(`http://localhost:5000/api/delete_record/${recordId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'  // Opcional, pero puede ayudar a evitar problemas con CORS
+                }
+            });
             if (response.ok) {
                 alert(`Registro ${recordId} eliminado exitosamente`);
+                window.parent.postMessage('reloadData', '*');  // Envía un mensaje al contenedor padre para recargar los datos
             } else {
-                alert(`Error al eliminar el registro ${recordId}`);
+                let error = await response.text();
+                alert(`Error al eliminar el registro ${recordId}: ${error}`);
             }
-        });
+        } catch (error) {
+            alert(`Error al eliminar el registro ${recordId}: ${error.message}`);
+        }
     }
-    </script>
-    """, unsafe_allow_html=True)
 
+    </script>
+    """
+
+    return table_html + modal_html + script_html
+
+
+
+def render_table(df):
+    html_content = generate_table_html(df)
+    st.components.v1.html(html_content, height=600, scrolling=True)
 
 
 
@@ -260,9 +422,8 @@ if df is not None:
         # Reordenar columnas del DataFrame
         df = df[['id', 'estado', 'lat', 'lon', 'poblacion', 'region']]
 
+        render_table(df)
 
-        # Generar y mostrar la tabla con botones
-        st.table(df)
 
 
 
@@ -326,28 +487,57 @@ if df is not None:
     nueva_latitud = st.number_input('Latitud:', min_value=-90.0, max_value=90.0)
     nueva_longitud = st.number_input('Longitud:', min_value=-180.0, max_value=180.0)
 
-    if st.button('Agregar'):
-        if nuevo_estado and nueva_poblacion and nueva_region and validar_coordenadas(nueva_latitud, nueva_longitud):
-            new_data = pd.DataFrame({
-                'estado': [nuevo_estado],
-                'poblacion': [nueva_poblacion],
-                'region': [nueva_region],
-                'lat': [nueva_latitud],
-                'lon': [nueva_longitud]
-            })
-            add_data_to_redis(new_data)  # No se necesita updated_df, la página se recargará
+    # Crear dos columnas en la misma fila
+    col1, col2 = st.columns(
+        [1, 3.9])  # Puedes ajustar el tamaño de las columnas si es necesario
+
+    with col1:
+
+        if st.button('Agregar a la DB'):
+            if nuevo_estado and nueva_poblacion and nueva_region and validar_coordenadas(
+                    nueva_latitud, nueva_longitud):
+                new_data = pd.DataFrame({
+                    'estado': [nuevo_estado],
+                    'poblacion': [nueva_poblacion],
+                    'region': [nueva_region],
+                    'lat': [nueva_latitud],
+                    'lon': [nueva_longitud]
+                })
+                add_record_to_db(
+                    new_data)  # Llama a la función para agregar a la base de datos
+            else:
+                st.warning(
+                    'Por favor complete todos los campos o ingrese coordenadas válidas. '
+                    'Latitud debe estar entre -90 y 90. Longitud debe estar entre -180 y 180.'
+                )
+
+    # Columna 2 para el segundo botón
+    with col2:
+
+        if st.button('Agregar'):
+            if nuevo_estado and nueva_poblacion and nueva_region and validar_coordenadas(
+                    nueva_latitud, nueva_longitud):
+                new_data = pd.DataFrame({
+                    'estado': [nuevo_estado],
+                    'poblacion': [nueva_poblacion],
+                    'region': [nueva_region],
+                    'lat': [nueva_latitud],
+                    'lon': [nueva_longitud]
+                })
+                add_data_to_redis(
+                    new_data)  # No se necesita updated_df, la página se recargará
+            else:
+                st.warning(
+                    'Por favor complete todos los campos o ingrese coordenadas válidas. '
+                    'Latitud debe estar entre -90 y 90. Longitud debe estar entre -180 y 180.'
+                )
 
 
-        else:
-            st.warning(
-                'Por favor complete todos los campos o ingrese coordenadas válidas. '
-                'Latitud debe estar entre -90 y 90. Longitud debe estar entre -180 y 180.'
-            )
 
     # Opción para editar registros existentes
     st.subheader('Editar Registro Existente')
 
-    registros = get_data_from_redis(redis_client, data_key)
+    registros = df
 
     if registros is not None:
         registros_list = registros.to_dict(orient='records')
