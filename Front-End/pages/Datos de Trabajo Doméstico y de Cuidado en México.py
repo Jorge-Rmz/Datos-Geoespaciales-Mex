@@ -16,7 +16,7 @@ redis_client = redis.Redis(host=redis_host, port=redis_port, decode_responses=Tr
 st.title('Datos de Trabajo Doméstico y de Cuidado en México')
 
 # URL del backend
-backend_url = "http://Backend:5000/get_data_trabajo_domestico"
+backend_url = "http://backend:5000/"
 
 # Función para verificar si Redis está disponible
 def is_redis_available():
@@ -35,48 +35,28 @@ def load_data():
         data = redis_client.get(data_key)
         if data:
             st.info("Mostrando datos de Redis")
-            redis_df = pd.read_json(StringIO(data), orient='split', encoding='utf-8')
+            redis_df = pd.read_json(StringIO(data), orient='split')
         else:
-            redis_df = pd.DataFrame()
             st.info("No hay datos en Redis")
+            redis_df = pd.DataFrame()
     else:
         st.warning("Redis no está disponible. Intentando cargar datos desde el backend")
         redis_df = pd.DataFrame()
 
     try:
-        response = requests.get(backend_url)
+        response = requests.get(backend_url + 'get_all_datos_trabajo_domestico')
         response.raise_for_status()
         data = response.json()
         backend_df = pd.DataFrame(data)
 
-        if not redis_df.empty:
-            # Asegurarse de que ambos DataFrames tengan las mismas columnas
-            common_columns = redis_df.columns.intersection(backend_df.columns)
-            redis_df = redis_df[common_columns]
-            backend_df = backend_df[common_columns]
+        if redis_available:
+            redis_client.set(data_key, backend_df.to_json(orient='split'))
+            st.info("Datos guardados en Redis")
 
-            # Se identifica filas editadas
-            updated_df = pd.merge(backend_df, redis_df, on=common_columns.tolist(), how='outer', indicator=True)
-            updated_df = updated_df[updated_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+        return backend_df
 
-            if not updated_df.empty:
-                # Reemplazar filas editadas en Redis
-                redis_df.update(updated_df)
-                # Guardar datos actualizados en Redis
-                redis_client.set(data_key, redis_df.to_json(orient='split'))
-                st.info("Datos actualizados en Redis")
-                return redis_df
-            else:
-                st.info("No hay datos nuevos ni editados para actualizar en Redis")
-                return redis_df
-        else:
-            if redis_available:
-                redis_client.set(data_key, backend_df.to_json(orient='split'))
-                st.info("Datos guardados en Redis por primera vez")
-            return backend_df
-
-    except requests.RequestException:
-        st.error("No se pudo obtener datos del backend ni de Redis")
+    except requests.RequestException as e:
+        st.error(f"No se pudo obtener datos del backend: {e}")
         if not redis_df.empty:
             st.info("Mostrando datos de Redis almacenados previamente")
             return redis_df
@@ -87,30 +67,137 @@ def load_data():
 if st.button('Refrescar Datos'):
     st.experimental_rerun()
 
-# Obtiene los datos del backend o desde Redis
+# Cargar datos
 df = load_data()
 
-# Mostrar la tabla
+# Opciones de acción
+action = st.radio("Seleccione una acción", ('Agregar', 'Editar', 'Eliminar'))
+
+# Mostrar formulario según la acción seleccionada
+if action == 'Agregar':
+    st.write("Agregar Registro")
+    with st.form(key='add_form'):
+        entidad_federativa = st.text_input('Entidad Federativa')
+        periodo = st.number_input('Periodo', min_value=2000, max_value=2100, step=1)
+        horas_domesticas_y_cuidado = st.number_input('Horas Domésticas y Cuidado')
+        tasa_trabajo_domestico = st.number_input('Tasa Trabajo Doméstico')
+        tasa_trabajo_cuidado = st.number_input('Tasa Trabajo Cuidado')
+        submit_button = st.form_submit_button(label='Confirmar')
+
+        if submit_button:
+            new_data = {
+                'entidad_federativa': entidad_federativa,
+                'periodo': periodo,
+                'horas_domesticas_y_cuidado': horas_domesticas_y_cuidado,
+                'tasa_trabajo_domestico': tasa_trabajo_domestico,
+                'tasa_trabajo_cuidado': tasa_trabajo_cuidado
+            }
+            try:
+                response = requests.post(
+                    backend_url + 'post_datos_trabajo_domestico',
+                    json=new_data
+                )
+                response.raise_for_status()
+                st.success("Registro agregado exitosamente")
+
+                # Actualizar datos en Redis
+                df_updated = load_data()
+                if df_updated is not None:
+                    redis_client.set(data_key, df_updated.to_json(orient='split'))
+                    st.info("Datos actualizados en Redis")
+            except requests.RequestException as e:
+                st.error(f"Error al agregar el registro: {e}")
+
+            st.experimental_rerun()
+
+elif action == 'Editar':
+    st.write("Editar Registro")
+    if df is not None:
+        ids = df['id'].tolist()
+        selected_id = st.selectbox("Seleccione el ID del registro a editar", ids)
+        if selected_id:
+            selected_row = df[df['id'] == selected_id].iloc[0]
+            with st.form(key='edit_form'):
+                entidad_federativa = st.text_input('Entidad Federativa', selected_row['entidad_federativa'])
+                periodo = st.number_input('Periodo', value=selected_row['periodo'])
+                horas_domesticas_y_cuidado = st.number_input('Horas Domésticas y Cuidado', value=selected_row['horas_domesticas_y_cuidado'])
+                tasa_trabajo_domestico = st.number_input('Tasa Trabajo Doméstico', value=selected_row['tasa_trabajo_domestico'])
+                tasa_trabajo_cuidado = st.number_input('Tasa Trabajo Cuidado', value=selected_row['tasa_trabajo_cuidado'])
+                submit_button = st.form_submit_button(label='Confirmar')
+
+                if submit_button:
+                    update_data = {
+                        'entidad_federativa': entidad_federativa,
+                        'periodo': periodo,
+                        'horas_domesticas_y_cuidado': horas_domesticas_y_cuidado,
+                        'tasa_trabajo_domestico': tasa_trabajo_domestico,
+                        'tasa_trabajo_cuidado': tasa_trabajo_cuidado
+                    }
+                    try:
+                        response = requests.put(
+                            backend_url + f"update_datos_trabajo_domestico?id={selected_id}",
+                            json=update_data
+                        )
+                        response.raise_for_status()
+                        st.success("Registro actualizado exitosamente")
+
+                        # Actualizar datos en Redis
+                        df_updated = load_data()
+                        if df_updated is not None:
+                            redis_client.set(data_key, df_updated.to_json(orient='split'))
+                            st.info("Datos actualizados en Redis")
+                    except requests.RequestException as e:
+                        st.error(f"Error al actualizar el registro: {e}")
+
+                    st.experimental_rerun()
+
+elif action == 'Eliminar':
+    st.write("Eliminar Registro")
+    if df is not None:
+        ids = df['id'].tolist()
+        selected_id = st.selectbox("Seleccione el ID del registro a eliminar", ids)
+        if selected_id:
+            selected_row = df[df['id'] == selected_id].iloc[0]
+            st.write(f"¿Está seguro de que desea eliminar el registro de {selected_row['entidad_federativa']} para el periodo {selected_row['periodo']}?")
+            if st.button('Confirmar'):
+                try:
+                    response = requests.delete(
+                        backend_url + f"delete_datos_trabajo_domestico?id={selected_id}"
+                    )
+                    response.raise_for_status()
+                    st.success("Registro eliminado exitosamente")
+
+                    # Actualizar datos en Redis
+                    df_updated = load_data()
+                    if df_updated is not None:
+                        redis_client.set(data_key, df_updated.to_json(orient='split'))
+                        st.info("Datos actualizados en Redis")
+                except requests.RequestException as e:
+                    st.error(f"Error al eliminar el registro: {e}")
+
+                st.experimental_rerun()
+
+# Mostrar la tabla con todos los datos
 if df is not None:
     st.write("Datos Completos:")
     st.dataframe(df)
 
 # Filtrado de datos por periodo
 if df is not None:
-    if 'Periodo' in df.columns:
-        df['Periodo'] = df['Periodo'].astype(str).str.replace(',', '').astype(int)
+    if 'periodo' in df.columns:
+        df['periodo'] = df['periodo'].astype(str).str.replace(',', '').astype(int)
 
-        periodos = df['Periodo'].unique()
+        periodos = df['periodo'].unique()
         selected_period = st.selectbox('Seleccione el periodo para visualizar', periodos)
 
-        filtered_df = df[df['Periodo'] == selected_period]
+        filtered_df = df[df['periodo'] == selected_period]
 
-        if 'Entidad federativa' in df.columns:
+        if 'entidad_federativa' in df.columns:
             selected_states = st.multiselect('Seleccione las entidades federativas para comparar',
-                                             filtered_df['Entidad federativa'].unique())
+                                             filtered_df['entidad_federativa'].unique())
 
             if selected_states:
-                comparison_df = filtered_df[filtered_df['Entidad federativa'].isin(selected_states)]
+                comparison_df = filtered_df[filtered_df['entidad_federativa'].isin(selected_states)]
             else:
                 comparison_df = pd.DataFrame(columns=df.columns)
 
@@ -119,22 +206,22 @@ if df is not None:
                 st.subheader('Comparación de Entidades Seleccionadas')
 
                 # Verificar si las columnas necesarias existen y no están vacías
-                if 'Horas Domesticas y Cuidado' in comparison_df.columns and not comparison_df['Horas Domesticas y Cuidado'].isnull().all():
-                    fig = px.pie(comparison_df, names='Entidad federativa', values='Horas Domesticas y Cuidado',
+                if 'horas_domesticas_y_cuidado' in comparison_df.columns and not comparison_df['horas_domesticas_y_cuidado'].isnull().all():
+                    fig = px.pie(comparison_df, names='entidad_federativa', values='horas_domesticas_y_cuidado',
                                  title='Horas a actividades domésticas y de cuidado')
                     st.plotly_chart(fig)
                 else:
                     st.warning("No hay datos suficientes para 'Horas Domésticas y Cuidado'.")
 
-                if 'Tasa Trabajo Domestico' in comparison_df.columns and not comparison_df['Tasa Trabajo Domestico'].isnull().all():
-                    fig2 = px.pie(comparison_df, names='Entidad federativa', values='Tasa Trabajo Domestico',
+                if 'tasa_trabajo_domestico' in comparison_df.columns and not comparison_df['tasa_trabajo_domestico'].isnull().all():
+                    fig2 = px.pie(comparison_df, names='entidad_federativa', values='tasa_trabajo_domestico',
                                   title='Participación en trabajo doméstico no remunerado')
                     st.plotly_chart(fig2)
                 else:
                     st.warning("No hay datos suficientes para 'Tasa Trabajo Doméstico'.")
 
-                if 'Tasa Trabajo Cuidado' in comparison_df.columns and not comparison_df['Tasa Trabajo Cuidado'].isnull().all():
-                    fig3 = px.pie(comparison_df, names='Entidad federativa', values='Tasa Trabajo Cuidado',
+                if 'tasa_trabajo_cuidado' in comparison_df.columns and not comparison_df['tasa_trabajo_cuidado'].isnull().all():
+                    fig3 = px.pie(comparison_df, names='entidad_federativa', values='tasa_trabajo_cuidado',
                                   title='Participación en trabajo no remunerado de cuidado')
                     st.plotly_chart(fig3)
                 else:

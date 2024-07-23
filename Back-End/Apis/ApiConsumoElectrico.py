@@ -4,7 +4,7 @@ import pandas as pd
 app = Flask(__name__)
 
 # Ruta del archivo CSV
-file_path = "datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv"
+file_path = "Back-End/datos/API_EG.USE.ELEC.KH.PC_DS2_es_csv_v2_834019.csv"
 
 
 def load_data():

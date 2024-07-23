@@ -1,3 +1,4 @@
+version: '3.8'
 services:
   frontend:
     build:
@@ -8,9 +9,16 @@ services:
     depends_on:
       - backend
       - redis
+      - db
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: datos_geo
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      BACKEND_URL: http://backend:5000/
 
   backend:
     build:
@@ -20,11 +28,25 @@ services:
       - "5000:5000"
     depends_on:
       - redis
+      - db
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: datos_geo
+      DB_USER: root
+      DB_PASSWORD: rootpassword
 
   redis:
     image: "redis:latest"
     ports:
       - "6379:6379"
+
+  db:
+    image: "mariadb:latest"
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: datos_geo
