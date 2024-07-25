@@ -28,6 +28,9 @@ def db_connection_status():
 def get_data_from_db():
     return pm.get_data_from_db()
 
+@app.route('/api/heartbeat', methods=['GET'])
+def heartbeat():
+    return jsonify({"status": "alive"}), 200
 
 @app.route('/api/create_record', methods=['POST'])
 def create_record_endpoint():
@@ -150,4 +153,7 @@ def post_poblacion_data():
         return jsonify({"error": f"Ocurrió un error: {e}"}), 500
 
 if __name__ == '__main__':
+    pm.wait_for_postgres()
+    pm.create_database()
+    pm.init_db()
     app.run(host='0.0.0.0', port=5000)

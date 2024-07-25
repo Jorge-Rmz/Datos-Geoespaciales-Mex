@@ -35,12 +35,20 @@ metadata = MetaData()
 
 estados_mexico = Table(
     'estados_mexico', metadata,
-    Column('id', Integer, primary_key=True),
+    Column('id', Integer, primary_key=True, autoincrement=True),
     Column('estado', String(255), unique=True, nullable=False),
     Column('lat', Float),
     Column('lon', Float),
     Column('poblacion', Integer),
     Column('region', String(255))
+)
+
+# Tabla de control para verificar si los datos iniciales ya fueron cargados
+init_control = Table(
+    'init_control', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('table_name', String(255), unique=True, nullable=False),
+    Column('initialized', Integer, default=0)
 )
 
 
@@ -54,8 +62,21 @@ def create_record(estado, lat, lon, poblacion, region):
             'poblacion': poblacion,
             'region': region
         }
+        # Insertar en la base de datos
         session.execute(estados_mexico.insert().values(new_record))
         session.commit()
+
+        # Agregar el nuevo registro a Redis
+        redis_data = redis_client.get(data_key)
+        if redis_data:
+            redis_data = json.loads(redis_data)
+        else:
+            redis_data = []
+
+        new_record_with_id = {'id': session.execute(text("SELECT LASTVAL()")).scalar(), **new_record}
+        redis_data.append(new_record_with_id)
+        redis_client.set(data_key, json.dumps(redis_data))
+
         return {"message": "Registro creado exitosamente."}, 201
     except IntegrityError as e:
         session.rollback()
@@ -75,52 +96,58 @@ def update_record(id, **kwargs):
         # Verificar si el registro existe
         existing_record = session.query(estados_mexico).filter_by(id=id).first()
         if not existing_record:
-            print(f"Registro con ID {id} no encontrado.")
             return {"error": "El registro con el ID proporcionado no existe."}, 404
 
-        # Actualizar el registro con los datos restantes en kwargs
-        print(f"Actualizando el registro con ID {id} con datos {kwargs}")
-        stmt = (
-            update(estados_mexico)
-            .where(estados_mexico.c.id == id)
-            .values(**kwargs)
-        )
+        # Actualizar el registro en la base de datos
+        stmt = update(estados_mexico).where(estados_mexico.c.id == id).values(**kwargs)
         session.execute(stmt)
         session.commit()
-        print(f"Registro con ID {id} actualizado exitosamente.")
+
+        # Actualizar el registro en Redis
+        redis_data = redis_client.get(data_key)
+        if redis_data:
+            redis_data = json.loads(redis_data)
+            for record in redis_data:
+                if record['id'] == id:
+                    record.update(kwargs)
+                    break
+            redis_client.set(data_key, json.dumps(redis_data))
+
         return {"message": "Registro actualizado exitosamente."}, 200
     except IntegrityError as e:
         session.rollback()
         if "duplicate key value violates unique constraint" in str(e.orig):
-            print(f"Error de integridad: {e}")
             return {"error": "El estado ya existe."}, 409
-        print(f"Error de integridad: {e}")
         return {"error": f"Error de integridad: {e}"}, 400
     except SQLAlchemyError as e:
         session.rollback()
-        print(f"Error al actualizar el registro: {e}")
         return {"error": f"Error al actualizar el registro: {e}"}, 400
-    except Exception as e:
-        session.rollback()
-        print(f"Error inesperado: {e}")
-        return {"error": f"Error inesperado: {e}"}, 500
     finally:
         session.close()
 
 
 def delete_record(id):
-    print("funcion delete record")
     session = Session()
     try:
+        # Eliminar el registro de la base de datos
         stmt = estados_mexico.delete().where(estados_mexico.c.id == id)
         session.execute(stmt)
         session.commit()
-        return {"Registro eliminado exitosamente."}, 201
+
+        # Eliminar el registro de Redis
+        redis_data = redis_client.get(data_key)
+        if redis_data:
+            redis_data = json.loads(redis_data)
+            redis_data = [record for record in redis_data if record['id'] != id]
+            redis_client.set(data_key, json.dumps(redis_data))
+
+        return {"message": "Registro eliminado exitosamente."}, 201
     except SQLAlchemyError as e:
         session.rollback()
-        return {f"Error al eliminar el registro: {e}"}, 400
+        return {"error": f"Error al eliminar el registro: {e}"}, 400
     finally:
         session.close()
+
 
 
 def get_data_from_db():
@@ -190,11 +217,11 @@ def wait_for_postgres():
 def create_database():
     try:
         # Conectar al servidor de PostgreSQL sin especificar la base de datos
-        conn = psycopg2.connect(dbname='postgres', user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, port=POSTGRES_PORT)
+        conn = psycopg2.connect(dbname='data_mex', user=POSTGRES_USER, password=POSTGRES_PASSWORD, host=POSTGRES_HOST, port=POSTGRES_PORT)
         conn.autocommit = True  # Necesario para ejecutar CREATE DATABASE
         with conn.cursor() as cursor:
             # Verificar si la base de datos ya existe
-            cursor.execute(f"SELECT 1 FROM pg_database WHERE datname = '{POSTGRES_DB}'")
+            cursor.execute(f"SELECT * FROM pg_database WHERE datname = '{POSTGRES_DB}'")
             if cursor.fetchone():
                 print(f"Base de datos '{POSTGRES_DB}' ya existe.")
             else:
@@ -217,9 +244,8 @@ def create_database():
 
 def init_db():
     try:
-        # Conectar al servidor de PostgreSQL
         with engine.connect() as connection:
-            # Verificar si la tabla existe
+            # Verificar si la tabla ya existe
             table_exists = connection.execute(text("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
@@ -230,71 +256,81 @@ def init_db():
 
             if not table_exists:
                 # Crear la tabla si no existe
-                connection.execute(text("""
-                    CREATE TABLE estados_mexico (
-                        id SERIAL PRIMARY KEY,
-                        estado VARCHAR(255) UNIQUE NOT NULL,
-                        lat FLOAT,
-                        lon FLOAT,
-                        poblacion INT,
-                        region VARCHAR(255)
-                    );
-                """))
+                metadata.create_all(engine)
                 print("Tabla 'estados_mexico' creada correctamente.")
-            else:
-                print("La tabla 'estados_mexico' ya existe.")
 
-            # Insertar datos iniciales
-            data = [
-                (
-                'Aguascalientes', 21.8853, -102.2916, 1434639, 'Centro-Norte'),
-                ('Baja California', 32.6246, -115.4523, 3769020, 'Noroeste'),
-                (
-                'Baja California Sur', 24.1444, -110.3005, 798447, 'Noroeste'),
-                ('Campeche', 19.8301, -90.5349, 928363, 'Sur-Sureste'),
-                ('Chiapas', 16.7569, -93.1292, 5543828, 'Sur-Sureste'),
-                ('Chihuahua', 28.6330, -106.0691, 3801487, 'Noroeste'),
-                ('Ciudad de México', 19.4326, -99.1332, 9209944, 'Centro'),
-                ('Coahuila', 25.4380, -100.9770, 3146771, 'Noroeste'),
-                ('Colima', 19.2452, -103.7250, 731391, 'Centro'),
-                ('Durango', 24.0277, -104.6532, 1832650, 'Noroeste'),
-                ('Estado de México', 19.4969, -99.7233, 17427790, 'Centro'),
-                ('Guanajuato', 21.0190, -101.2574, 6183976, 'Centro-Norte'),
-                ('Guerrero', 17.4392, -99.5451, 3533251, 'Sur-Sureste'),
-                ('Hidalgo', 20.1011, -98.7624, 3082841, 'Centro'),
-                ('Jalisco', 20.6597, -103.3496, 8348193, 'Centro-Norte'),
-                ('Michoacán', 19.7059, -101.1950, 4828681, 'Centro-Norte'),
-                ('Morelos', 18.6813, -99.1013, 1971520, 'Centro'),
-                ('Nayarit', 21.7514, -104.8455, 1282146, 'Centro-Norte'),
-                ('Nuevo León', 25.6866, -100.3161, 5557720, 'Noreste'),
-                ('Oaxaca', 17.0732, -96.7266, 4132148, 'Sur-Sureste'),
-                ('Puebla', 19.0413, -98.2062, 6583278, 'Centro'),
-                ('Querétaro', 20.5888, -100.3899, 2279632, 'Centro-Norte'),
-                ('Quintana Roo', 19.1817, -88.4791, 1857985, 'Sur-Sureste'),
-                ('San Luis Potosí', 22.1566, -100.9855, 2822235,
-                 'Centro-Norte'),
-                ('Sinaloa', 24.8041, -107.4937, 3078762, 'Noroeste'),
-                ('Sonora', 29.0729, -110.9559, 2944842, 'Noroeste'),
-                ('Tabasco', 17.8409, -92.6189, 2395272, 'Sur-Sureste'),
-                ('Tamaulipas', 24.2669, -98.8363, 3650601, 'Noreste'),
-                ('Tlaxcala', 19.3182, -98.2370, 1342977, 'Centro'),
-                ('Veracruz', 19.1738, -96.1342, 8112505, 'Sur-Sureste'),
-                ('Yucatán', 20.7099, -89.0943, 2320894, 'Sur-Sureste'),
-                ('Zacatecas', 22.7709, -102.5832, 1622138, 'Centro-Norte')
-            ]
+            # Verificar si los datos iniciales ya fueron cargados
+            init_control_exists = connection.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'init_control'
+                );
+            """)).scalar()
 
-            # Ejecutar la inserción de datos
+            if not init_control_exists:
+                # Crear la tabla de control si no existe
+                metadata.create_all(engine)
+                print("Tabla 'init_control' creada correctamente.")
+
+            # Verificar si los datos ya fueron inicializados
+            init_record = connection.execute(text("""
+                SELECT initialized FROM init_control WHERE table_name = 'estados_mexico';
+            """)).fetchone()
+
+            if init_record and init_record[0] == 1:
+                print("Los datos iniciales ya fueron cargados.")
+                return
+
+            # Leer datos desde el archivo CSV
+            df = pd.read_csv(file_path, encoding='utf-8')
+            df['id'] = range(1, len(df) + 1)  # Asignar IDs únicos
+            data = df.to_dict(orient='records')
+
+            # Insertar datos en PostgreSQL
+            for record in data:
+                estado = record['estado']
+                lat = record['lat']
+                lon = record['lon']
+                poblacion = record['poblacion']
+                region = record['region']
+                id = record['id']
+
+                try:
+                    print(f"Insertando: {id}, {estado}, {lat}, {lon}, {poblacion}, {region}")
+                    query = text("""
+                        INSERT INTO estados_mexico (id, estado, lat, lon, poblacion, region)
+                        VALUES (:id, :estado, :lat, :lon, :poblacion, :region)
+                        ON CONFLICT (estado) DO NOTHING;
+                    """)
+                    connection.execute(query, {'id': id, 'estado': estado,
+                                               'lat': lat, 'lon': lon,
+                                               'poblacion': poblacion,
+                                               'region': region})
+                except SQLAlchemyError as e:
+                    print(f"Error al insertar {estado}: {e}")
+
+            connection.commit()
+            print("Datos iniciales insertados correctamente en la tabla 'estados_mexico'.")
+
+            # Cargar los datos en Redis
+            redis_client.set(data_key, json.dumps(data))
+            print("Datos cargados en Redis correctamente.")
+
+            # Marcar los datos como inicializados en la tabla de control
             connection.execute(text("""
-                INSERT INTO estados_mexico (estado, lat, lon, poblacion, 
-                region) VALUES (:estado, :lat, :lon, :poblacion, :region)
-                ON CONFLICT (estado) DO NOTHING;
-            """), [{'estado': estado, 'lat': lat, 'lon': lon,
-                    'poblacion': poblacion, 'region': region} for
-                   estado, lat, lon, poblacion, region in data])
-            print(
-                "Datos iniciales insertados correctamente en la"
-                " tabla 'estados_mexico'.")
+                INSERT INTO init_control (table_name, initialized)
+                VALUES ('estados_mexico', 1)
+                ON CONFLICT (table_name) DO UPDATE
+                SET initialized = 1;
+            """))
+            connection.commit()
 
     except SQLAlchemyError as e:
         print(f"Error al inicializar la base de datos: {e}")
+
+    except Exception as e:
+        print(f"Error general: {e}")
+
+
 
